@@ -40,8 +40,19 @@ are set, and writes the release notes from the commit subjects.
       resolves through:
 
       ```sh
-      git tag -f v1 v1.0.0 && git push -f origin v1
+      git tag -f -a v1 v1.0.0^{} -m "v1" && git push -f origin v1
       ```
+
+      `^{}` because `v1.0.0` is an annotated tag, and a tag pointing at a tag
+      is not what `@v1` should resolve through. `-a -m` because a repository
+      configured to sign its tags makes every `git tag` annotated, and an
+      annotated tag with no message is an error rather than a prompt.
+
+      The release workflow listens for three-part tags, so this move starts
+      nothing. With one exception, met once: GitHub reads the workflow file
+      at the ref being pushed, so a `v1` moved onto a commit that predates
+      that filter runs the old file. The preflight job refuses it, before
+      anything is published, which is what it is for.
 
 - [ ] Publish the Action to the Marketplace from the release page, on a first
       release. [ACTION.md](ACTION.md) has the steps and the categories.

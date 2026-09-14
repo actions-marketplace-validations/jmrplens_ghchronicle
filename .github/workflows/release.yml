@@ -3,7 +3,13 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      # Three parts, so the moving major tag does not start a release. The
+      # Action resolves `uses: jmrplens/ghchronicle@v1` through a `v1` that is
+      # force-moved onto each patch release, and under a bare `v*` that push
+      # started this workflow, whose first job compares the tag against the
+      # VERSION file: `1` is not `1.0.0`, so every move of the major tag left
+      # a failed release run behind it.
+      - "v*.*.*"
 
 # Everything this workflow is trusted with, and nothing else. id-token is what
 # makes the cosign signatures keyless: the identity is this workflow, recorded

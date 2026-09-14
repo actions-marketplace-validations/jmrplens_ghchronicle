@@ -32,11 +32,14 @@ GitHub's Marketplace takes an Action from any public repository whose
 3. Move the major tag so `@v1` keeps resolving:
 
     ```sh
-    git tag -f v1 v1.0.0 && git push -f origin v1
+    git tag -f -a v1 v1.0.0^{} -m "v1" && git push -f origin v1
     ```
 
     Every Action in the Marketplace does this. A workflow pinned to `@v1` then
-    follows the patch releases without editing.
+    follows the patch releases without editing. `^{}` names the commit rather
+    than the annotated tag, which is what `@v1` has to resolve through, and
+    the release workflow listens for three-part tags only, so moving this one
+    starts nothing.
 
 The listing name, description, icon and colour come from the `name`,
 `description` and `branding` keys of `action.yml`.
