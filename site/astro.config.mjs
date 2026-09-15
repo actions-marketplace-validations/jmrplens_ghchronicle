@@ -15,6 +15,19 @@ import { fileURLToPath } from "node:url";
 const siteRoot = fileURLToPath(new URL(".", import.meta.url));
 const siteBase = "/ghchronicle";
 
+// Where the documentation is advertised, which is not where it is served.
+//
+// `site` below has to name GitHub Pages, because that is where the bytes are
+// and it is what the canonical link, the sitemap and the hreflang pairs must
+// agree with. What a reader is handed is the other one: jmrp.io 301s
+// /docs/ghchronicle and everything under it to the Pages URL, so a link that
+// carries it reaches the same page and puts the canonical domain in the
+// places a mention counts, which is the arrangement the other six projects
+// already use. Every absolute link written OUTSIDE the site, the README, the
+// generated docs/, the issue templates, the dashboards, uses this one; the
+// site's own internal links stay relative and never see it.
+const publicDocs = "https://jmrp.io/docs/ghchronicle";
+
 /**
  * The newest git commit date for the file behind a sitemap URL, so
  * `sitemap-0.xml` carries a real per-page `<lastmod>`. Starlight omits it.

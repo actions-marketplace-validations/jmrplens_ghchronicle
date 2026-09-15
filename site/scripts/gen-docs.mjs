@@ -73,7 +73,19 @@ process.env.BASE_URL = fromConfig(
 );
 
 const { reduceBody } = await import("../src/lib/page-markdown.mjs");
-const { BASE, ORIGIN, pageUrl, routeOf } = await import("../src/lib/site.mjs");
+const { BASE, routeOf } = await import("../src/lib/site.mjs");
+
+// The origin these files advertise, which is the canonical domain rather than
+// the one the pages are served from; astro.config.mjs says why beside the
+// declaration. `site.mjs` keeps building the served URLs for the site itself,
+// so only the links that leave the site are rewritten here.
+const PUBLIC = fromConfig(
+	/const publicDocs\s*=\s*"([^"]+)"/,
+	"public docs URL",
+);
+
+/** @param {string} route @returns {string} the advertised URL of a page. */
+const publicUrl = (route) => (route ? `${PUBLIC}/${route}/` : `${PUBLIC}/`);
 
 // docs/<file> <- the site pages it holds, in the order they are read in.
 //
@@ -261,10 +273,12 @@ function retarget(target, isImage, context) {
 	// twice in docs/metrics.md, and GitHub resolves #account to the first of
 	// them, which is the wrong section. The anchor is exact on the page it was
 	// written for, so that is where it points.
-	if (target.startsWith("#")) return `${pageUrl(context.route)}${target}`;
+	if (target.startsWith("#")) return `${publicUrl(context.route)}${target}`;
 	// A link into the site. Rooted at the base path because that is where the
 	// page is served from; read from GitHub the same text is a link to GitHub.
-	if (target.startsWith(`${BASE}/`)) return `${ORIGIN}${target}`;
+	if (target.startsWith(`${BASE}/`)) {
+		return `${PUBLIC}${target.slice(BASE.length)}`;
+	}
 	return target;
 }
 
@@ -411,7 +425,7 @@ function render(spec, pages) {
 			// An autolink rather than the bare URL the twin carries: docs/ is
 			// linted as Markdown, and MD034 is right that a bare URL in prose is
 			// not a link everywhere it will be read.
-			`Source: <${pageUrl(route)}>`,
+			`Source: <${publicUrl(route)}>`,
 			"",
 			transplant(
 				reduceBody({ body: page.body, file: page.file, locale: "en" }),

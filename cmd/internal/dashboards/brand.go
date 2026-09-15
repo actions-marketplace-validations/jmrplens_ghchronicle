@@ -22,9 +22,11 @@ import (
 //go:embed mark-dark.svg
 var brandMark string
 
-// The two pages the header links to.
+// The two pages the header links to. The documentation is named by the
+// canonical domain, which 301s to where the pages are served; site/astro.config.mjs
+// says why beside the declaration this repeats.
 const (
-	docsURL   = "https://jmrplens.github.io/ghchronicle/"
+	docsURL   = "https://jmrp.io/docs/ghchronicle/"
 	sourceURL = "https://github.com/jmrplens/ghchronicle"
 )
 

@@ -24,14 +24,14 @@ ghchronicle -config config.yaml
 ## Documentation
 
 The full documentation is at
-**<https://jmrplens.github.io/ghchronicle/>**, in English and Spanish:
-[quickstart](https://jmrplens.github.io/ghchronicle/start/quickstart/),
-[the 91 measurements](https://jmrplens.github.io/ghchronicle/collectors/measurements/),
-[choosing a store](https://jmrplens.github.io/ghchronicle/sinks/),
-[the cost of a sweep](https://jmrplens.github.io/ghchronicle/api/cost/) and
-[troubleshooting](https://jmrplens.github.io/ghchronicle/reference/troubleshooting/).
+**<https://jmrp.io/docs/ghchronicle/>**, in English and Spanish:
+[quickstart](https://jmrp.io/docs/ghchronicle/start/quickstart/),
+[the 91 measurements](https://jmrp.io/docs/ghchronicle/collectors/measurements/),
+[choosing a store](https://jmrp.io/docs/ghchronicle/sinks/),
+[the cost of a sweep](https://jmrp.io/docs/ghchronicle/api/cost/) and
+[troubleshooting](https://jmrp.io/docs/ghchronicle/reference/troubleshooting/).
 Every page also serves itself as markdown at the same path with `.md` on the
-end, and [llms.txt](https://jmrplens.github.io/ghchronicle/llms.txt) indexes the
+end, and [llms.txt](https://jmrp.io/docs/ghchronicle/llms.txt) indexes the
 lot. The copies under [docs/](docs/README.md) are generated from those pages.
 
 ## What it collects
