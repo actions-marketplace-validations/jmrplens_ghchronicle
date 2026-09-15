@@ -42,7 +42,13 @@ GitHub's Marketplace takes an Action from any public repository whose
     starts nothing.
 
 The listing name, description, icon and colour come from the `name`,
-`description` and `branding` keys of `action.yml`.
+`description` and `branding` keys of `action.yml`, and it takes them from the
+`action.yml` of the newest published release rather than from `main`: a
+change to them shows on the listing at the next tag, not at the next push.
+
+The tile cannot be the project's own mark. GitHub draws an Action's tile from
+one Feather icon in one of nine colours and takes no image, so `grid` on
+`green` is the nearest thing in that set to a green grid of squares.
 
 ## The token
 

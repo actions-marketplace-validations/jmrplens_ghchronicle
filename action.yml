@@ -1,9 +1,13 @@
 name: ghchronicle
 description: Collect GitHub metrics for an account and, optionally, render a profile card SVG.
 author: jmrplens
+# The Marketplace listing draws these two, and they are the only picture it
+# will take: an Action's tile is a Feather icon in one of nine colours, never
+# an image the repository supplies. `grid` is the closest shape in that set to
+# the mark, which is a grid of squares, and green is the mark's own colour.
 branding:
-  icon: activity
-  color: blue
+  icon: grid
+  color: green
 
 inputs:
   token:
@@ -74,6 +78,14 @@ runs:
       env:
         USER_LOGIN: ${{ inputs.user }}
       run: |
+        set -euo pipefail
+        # A GitHub login, and nothing else. The value is written into a YAML
+        # document below, where a line break would let it add keys of its own
+        # to the configuration this Action then runs.
+        case $USER_LOGIN in
+          "" | *[!A-Za-z0-9-]* | -* | *-)
+            echo "user must be a GitHub login, got '$USER_LOGIN'" >&2; exit 2 ;;
+        esac
         # Every family on, nothing written anywhere: the card is the only
         # output of a default run. A user who wants a database supplies a
         # config file of their own.
@@ -91,7 +103,22 @@ runs:
     - name: Use the given configuration
       if: inputs.config != ''
       shell: bash
-      run: echo "GHC_CONFIG=${{ inputs.config }}" >> "$GITHUB_ENV"
+      # Through the environment like every other input here, rather than
+      # interpolated into the script. A `${{ }}` inside a `run:` is expanded
+      # before bash sees the line, so the value becomes part of the command
+      # rather than an argument to it, and a caller who passes this input from
+      # something a stranger wrote is handing that stranger the runner.
+      env:
+        CONFIG: ${{ inputs.config }}
+      run: |
+        set -euo pipefail
+        # One line, and the name of a file: a value carrying a newline would
+        # otherwise write a second variable of its own into the environment
+        # every later step reads.
+        case $CONFIG in
+          *[$'\n\r']*) echo "config must be one path, with no line break" >&2; exit 2 ;;
+        esac
+        echo "GHC_CONFIG=$CONFIG" >> "$GITHUB_ENV"
 
     - name: Run
       shell: bash
