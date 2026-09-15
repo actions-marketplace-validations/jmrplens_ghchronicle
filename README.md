@@ -21,6 +21,45 @@ July" still has an answer.
 ghchronicle -config config.yaml
 ```
 
+## What it draws
+
+Five Grafana dashboards, one per store that can answer with dated points,
+generated from a single specification and shipped in the repository. This is
+one section of the eighteen, drawn from a demonstration account:
+
+![The contributions section of the InfluxDB dashboard: contributions over
+time, a contribution calendar, the commit mix, commits per week, per hour of
+day, per weekday and per repository, the yearly totals, and the commits a
+profile hides](site/src/assets/dashboards/contributions.png)
+
+And the headline section, which every dashboard opens with:
+
+![The overview section: repositories, stars and forks; views, unique visitors
+and clones in range; followers, following, sponsors and sponsoring; and the
+account's own figures](site/src/assets/dashboards/overview.png)
+
+## What it renders
+
+A profile card, from the same sweep, in ten layouts and two families. The
+three animated ones animate where the reader's browser lets them, and `auto`
+puts both themes in one file, which is what these are:
+
+![The animated-counters layout: a grid of large numbers over a contribution
+sparkline](.github/readme/card-animated-counters.svg)
+
+![The github-stats layout: a header band, rows of four monospace numbers and a
+language share bar with its legend](.github/readme/card-github-stats.svg)
+
+![The badge-row layout: a horizontal row of small pill badges, each with a
+label and a number](.github/readme/card-badge-row.svg)
+
+```sh
+ghchronicle -config config.yaml -card card.svg -card-layout animated-counters -card-theme auto
+```
+
+[The ten layouts](https://jmrp.io/docs/ghchronicle/card/layouts/), with what
+each one draws and how to put one in a profile README.
+
 ## Documentation
 
 The full documentation is at

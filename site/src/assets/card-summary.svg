@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="495" height="257" viewBox="0 0 495 257" role="img" aria-labelledby="ghcTitle ghcDesc">
+<title id="ghcTitle">octocat</title>
+<desc id="ghcDesc">GitHub summary for octocat: 80 stars, 9 forks, 1200 followers, 42 public repositories, 1105 contributions in the last year, 361 repository views in the last 14 days, 54 unique visitors in the last 14 days. Most starred repositories: hello-world with 80 stars in Go. Contributions per day over the last 7 days, peaking at 9.</desc>
+<style>
+.bg{fill:#0d1117;stroke:#30363d}
+.panel{fill:#161b22}
+.t,.v,.big{fill:#e6edf3}
+.d,.l,.h,.s{fill:#8b949e}
+.n,.c{fill:#c9d1d9}
+.star,.pill-v{fill:#e3b341}
+.on-accent{fill:#0d1117}
+.line{stroke:#58a6ff}
+.area{fill:#58a6ff}
+.axis,.edge{stroke:#30363d}
+.track{fill:#30363d}
+.ok{fill:#3fb950}
+.fg{fill:#e6edf3}
+.h0{fill:#151b23}.h1{fill:#033a16}.h2{fill:#196c2e}.h3{fill:#2ea043}.h4{fill:#56d364}
+text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif}
+.mono{font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace}
+.t{font-size:18px;font-weight:600}
+.d{font-size:11px}
+.v{font-size:16px;font-weight:600}
+.big{font-size:24px;font-weight:700}
+.l{font-size:11px}
+.h{font-size:10px;font-weight:600;letter-spacing:0.08em}
+.n{font-size:12px}
+.s{font-size:11px}
+.c{font-size:12px}
+.line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.area{opacity:0.14;stroke:none}
+.axis{stroke-width:1}
+.edge{fill:none;stroke-width:1}
+</style>
+<rect class="bg" x="0.5" y="0.5" width="494" height="256" rx="6"/>
+<text class="t" x="25" y="34" text-anchor="start">octocat</text>
+<text class="v" x="25" y="64" text-anchor="start">80</text>
+<text class="l" x="25" y="79" text-anchor="start">Stars</text>
+<text class="v" x="136.25" y="64" text-anchor="start">9</text>
+<text class="l" x="136.25" y="79" text-anchor="start">Forks</text>
+<text class="v" x="247.5" y="64" text-anchor="start">1.2k</text>
+<text class="l" x="247.5" y="79" text-anchor="start">Followers</text>
+<text class="v" x="358.75" y="64" text-anchor="start">42</text>
+<text class="l" x="358.75" y="79" text-anchor="start">Repositories</text>
+<text class="v" x="25" y="106" text-anchor="start">1.1k</text>
+<text class="l" x="25" y="121" text-anchor="start">Contributions (1y)</text>
+<text class="v" x="173.33" y="106" text-anchor="start">361</text>
+<text class="l" x="173.33" y="121" text-anchor="start">Views (14d)</text>
+<text class="v" x="321.67" y="106" text-anchor="start">54</text>
+<text class="l" x="321.67" y="121" text-anchor="start">Visitors (14d)</text>
+<text class="h" x="25" y="145" text-anchor="start">CONTRIBUTIONS PER DAY</text>
+<line class="axis" x1="25" y1="195" x2="470" y2="195"/>
+<path class="area" d="M25,195 L25,185.22 L99.17,180.33 L173.33,195 L247.5,175.44 L321.67,160.78 L395.83,185.22 L470,151 L470,195Z"/>
+<polyline class="line" points="25,185.22 99.17,180.33 173.33,195 247.5,175.44 321.67,160.78 395.83,185.22 470,151"/>
+<text class="h" x="25" y="219" text-anchor="start">TOP REPOSITORIES BY STARS</text>
+<circle cx="29" cy="235" r="4" fill="#00add8"/>
+<text class="n" x="39" y="239" text-anchor="start">hello-world</text>
+<text class="s" x="412" y="239" text-anchor="end">Go</text>
+<path class="star" transform="translate(426 229.5) scale(0.6)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c" x="470" y="239" text-anchor="end">80</text>
+</svg>

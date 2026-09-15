@@ -104,7 +104,7 @@ Prometheus 3, Loki 3, the OpenTelemetry collector and Telegraf, at the pinned
 versions. OpenSearch, TimescaleDB and anything behind the Telegraf or OTLP hop
 are still an inference from the format.
 
-There are four more things, and none of them is a layer. Each is switched on by
+There are five more things, and none of them is a layer. Each is switched on by
 an environment variable and skipped when it is absent, so an ordinary `go test
 ./...` stays offline.
 
@@ -144,6 +144,19 @@ fastest way to see what a collector actually produces.
 ```sh
 go run ./cmd/probe owner/name
 GHC_DUMP=actions go run ./cmd/probe owner/name
+```
+
+**The pictures of the card.** `GHC_CARD_GALLERY` names an existing directory
+and `TestCardGallery` renders one card per layout into it, from the fake
+GitHub rather than from anybody's account. That is where the pictures on
+[the layouts page](/ghchronicle/card/layouts/) come from, and a layout that
+changes shape is one command away from a set that agrees with it.
+`GHC_CARD_THEME` picks dark, light or `auto`, which puts both themes in one
+file behind a `prefers-color-scheme` query.
+
+```sh
+mkdir -p /tmp/cards
+GHC_CARD_GALLERY=/tmp/cards go test ./test/e2e/ -run TestCardGallery
 ```
 
 ## Running the stack

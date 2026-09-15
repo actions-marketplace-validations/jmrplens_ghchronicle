@@ -106,7 +106,7 @@ Prometheus 3, Loki 3, el colector de OpenTelemetry y Telegraf, en las versiones
 fijadas. OpenSearch, TimescaleDB y todo lo que quede detrás del salto de
 Telegraf o de OTLP siguen siendo una inferencia a partir del formato.
 
-Hay cuatro cosas más, y ninguna es una capa. Cada una se enciende con una
+Hay cinco cosas más, y ninguna es una capa. Cada una se enciende con una
 variable de entorno y se salta cuando no está, así que un `go test ./...`
 corriente sigue sin red.
 
@@ -148,6 +148,19 @@ forma más rápida de ver lo que produce de verdad un colector.
 ```sh
 go run ./cmd/probe owner/name
 GHC_DUMP=actions go run ./cmd/probe owner/name
+```
+
+**Las imágenes de la tarjeta.** `GHC_CARD_GALLERY` nombra un directorio que ya
+existe y `TestCardGallery` dibuja en él una tarjeta por diseño, desde el GitHub
+falso y no desde la cuenta de nadie. De ahí salen las imágenes de
+[la página de diseños](/ghchronicle/es/card/layouts/), y un diseño que cambia
+de forma queda a un comando de tener unas imágenes que concuerden con él.
+`GHC_CARD_THEME` elige `dark`, `light` o `auto`, que mete los dos temas en un
+solo fichero detrás de una consulta `prefers-color-scheme`.
+
+```sh
+mkdir -p /tmp/cards
+GHC_CARD_GALLERY=/tmp/cards go test ./test/e2e/ -run TestCardGallery
 ```
 
 ## Levantar el stack

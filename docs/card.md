@@ -149,7 +149,7 @@ README as if GitHub had drawn it.
 The original card: title, two rows of numbers, a sparkline and the most starred
 repositories.
 
-![The summary layout: a title, two rows of large numbers, a contribution sparkline and a list of the most starred repositories](../site/src/assets/card-summary.png)
+![The summary layout: a title, two rows of large numbers, a contribution sparkline and a list of the most starred repositories](../site/src/assets/card-summary.svg)
 
 ### github-stats
 
@@ -157,62 +157,62 @@ GitHub's own box: a header band, rows of four monospace numbers and a language
 share bar with its legend. The widest layout at 800 pixels, and the one that
 looks most native in a profile README.
 
-![The github-stats layout: a header band, rows of four monospace numbers and a horizontal language share bar with its legend](../site/src/assets/card-github-stats.png)
+![The github-stats layout: a header band, rows of four monospace numbers and a horizontal language share bar with its legend](../site/src/assets/card-github-stats.svg)
 
 ### github-compact
 
 One row of monospace numbers under a thin header band.
 
-![The github-compact layout: a thin header band above a single row of monospace numbers](../site/src/assets/card-github-compact.png)
+![The github-compact layout: a thin header band above a single row of monospace numbers](../site/src/assets/card-github-compact.svg)
 
 ### badge-row
 
 A row of 20 pixel pill badges, one per number, for a README line. The width
 follows the content rather than being set.
 
-![The badge-row layout: a horizontal row of small pill badges, each with a label and a number](../site/src/assets/card-badge-row.png)
+![The badge-row layout: a horizontal row of small pill badges, each with a label and a number](../site/src/assets/card-badge-row.svg)
 
 ### wide-banner
 
 A full-width 60 pixel banner: login on the left, numbers spread across, the
 sparkline drawing itself behind them.
 
-![The wide-banner layout: a wide, short banner with the login on the left, numbers spread across and a sparkline behind them](../site/src/assets/card-wide-banner.png)
+![The wide-banner layout: a wide, short banner with the login on the left, numbers spread across and a sparkline behind them](../site/src/assets/card-wide-banner.svg)
 
 ### sparkline-hero
 
 The contribution sparkline is the whole card, with up to three numbers
 overlaid. The line draws itself on load.
 
-![The sparkline-hero layout: a large contribution sparkline filling the card with three numbers overlaid](../site/src/assets/card-sparkline-hero.png)
+![The sparkline-hero layout: a large contribution sparkline filling the card with three numbers overlaid](../site/src/assets/card-sparkline-hero.svg)
 
 ### language-ring
 
 A donut of language shares with the legend beside it and a row of headline
 numbers.
 
-![The language-ring layout: a donut chart of language shares with a legend beside it and a row of headline numbers](../site/src/assets/card-language-ring.png)
+![The language-ring layout: a donut chart of language shares with a legend beside it and a row of headline numbers](../site/src/assets/card-language-ring.svg)
 
 ### repo-list
 
 The most starred repositories as the main content: language dot, stars and a
 bar per row, totals underneath.
 
-![The repo-list layout: one row per repository with a language dot, the star count and a proportional bar, with totals underneath](../site/src/assets/card-repo-list.png)
+![The repo-list layout: one row per repository with a language dot, the star count and a proportional bar, with totals underneath](../site/src/assets/card-repo-list.svg)
 
 ### activity-heatmap
 
 The last twelve weeks of the contribution calendar as GitHub's green squares,
 with up to three numbers beside it.
 
-![The activity-heatmap layout: twelve weeks of contribution squares in GitHub's green scale with three numbers beside them](../site/src/assets/card-activity-heatmap.png)
+![The activity-heatmap layout: twelve weeks of contribution squares in GitHub's green scale with three numbers beside them](../site/src/assets/card-activity-heatmap.svg)
 
 ### animated-counters
 
 Numbers that count up on load over a sparkline that draws itself, settling to
 the static card.
 
-![The animated-counters layout: a grid of large numbers over a contribution sparkline](../site/src/assets/card-animated-counters.png)
+![The animated-counters layout: a grid of large numbers over a contribution sparkline](../site/src/assets/card-animated-counters.svg)
 
 > **The settled frame is the whole card**
 >
