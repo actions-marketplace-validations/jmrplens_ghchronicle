@@ -2,7 +2,12 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"io"
+	"log/slog"
+	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"testing"
 
@@ -155,6 +160,83 @@ func TestGroupsFlagListsEveryGroupAndItsFamilies(t *testing.T) {
 	for _, family := range config.Families() {
 		if _, known := config.GroupOf(family); !known {
 			t.Errorf("family %q is not in the table -groups prints from", family)
+		}
+	}
+}
+
+// TestTheFirstSweepIsPrimedOnlyForAServingExporter keeps the priming sweep to
+// the one run that needs it. An exporter holds nothing until a sweep fills it,
+// so a serving run with one primes unless told not to; a store that is pushed
+// to already has what it collected, and -once or -card is a full sweep anyway.
+// Each clause is its own case, because any one of them read the other way
+// primes a run that should not be, or leaves an exporter empty for a cadence.
+func TestTheFirstSweepIsPrimedOnlyForAServingExporter(t *testing.T) {
+	exporter := func(noPrime bool) *config.Config {
+		return &config.Config{
+			StateFile: filepath.Join(t.TempDir(), "state.json"),
+			Sinks:     config.Sinks{Prometheus: &config.PrometheusSink{NoPrime: noPrime}},
+		}
+	}
+	pushOnly := &config.Config{
+		StateFile: filepath.Join(t.TempDir(), "state.json"),
+		Sinks:     config.Sinks{Stdout: true},
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	for _, tc := range []struct {
+		name  string
+		cfg   *config.Config
+		o     options
+		prime bool
+	}{
+		{"a serving exporter", exporter(false), options{}, true},
+		{"a serving exporter told not to prime", exporter(true), options{}, false},
+		{"a serving run with no exporter", pushOnly, options{}, false},
+		{"an exporter under -once", exporter(false), options{once: true}, false},
+		{"an exporter under -card", exporter(false), options{card: "card.svg"}, false},
+		{"no exporter under -once", pushOnly, options{once: true}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRunner(tc.cfg, nil, nil, logger, &tc.o)
+			if r.Prime != tc.prime {
+				t.Errorf("Prime = %v, want %v", r.Prime, tc.prime)
+			}
+		})
+	}
+}
+
+// TestTheStartUpLineCountsTheFamiliesThatRun holds the "families" attribute
+// of the start-up line to the families the selected groups hold. It is the
+// one number on that line an operator can check against -groups, so a count
+// that ran the wrong way would read as a configuration error that is not
+// there.
+func TestTheStartUpLineCountsTheFamiliesThatRun(t *testing.T) {
+	line := startUpNote(t)
+	want := fmt.Sprintf(`families="%d of %d"`, len(config.FamiliesIn("audience")), len(config.Families()))
+	if len(config.FamiliesIn("audience")) == 0 {
+		t.Fatal("the audience group holds no families, so this test proves nothing")
+	}
+	if !strings.Contains(line, want) {
+		t.Errorf("the start-up line lacks %s:\n%s", want, line)
+	}
+}
+
+// TestBothThemesNameTheDarkCardTheWayAPictureElementReadsIt pins the file
+// names -card-theme both writes: the path as given for the light card and the
+// same name with _dark before the extension for the dark one, which is the
+// pair the <picture> in the documentation points at.
+func TestBothThemesNameTheDarkCardTheWayAPictureElementReadsIt(t *testing.T) {
+	for _, tc := range []struct {
+		path, theme string
+		want        []cardFile
+	}{
+		{"card.svg", "dark", []cardFile{{path: "card.svg", theme: "dark"}}},
+		{"out/card.svg", "both", []cardFile{{path: "out/card.svg", theme: "light"}, {path: "out/card_dark.svg", theme: "dark"}}},
+		{"profile", "both", []cardFile{{path: "profile", theme: "light"}, {path: "profile_dark", theme: "dark"}}},
+		{"a.b/card.v2.svg", "both", []cardFile{{path: "a.b/card.v2.svg", theme: "light"}, {path: "a.b/card.v2_dark.svg", theme: "dark"}}},
+	} {
+		if got := cardFiles(tc.path, tc.theme); !slices.Equal(got, tc.want) {
+			t.Errorf("cardFiles(%q, %q) = %v, want %v", tc.path, tc.theme, got, tc.want)
 		}
 	}
 }

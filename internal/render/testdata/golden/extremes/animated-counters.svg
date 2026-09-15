@@ -1,0 +1,298 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="348" viewBox="0 0 300 348" role="img" aria-labelledby="ghcTitle ghcDesc">
+<title id="ghcTitle">A heading far too long for any band A heading far too long for any band A heading far too long for any band A heading far too long for any band </title>
+<desc id="ghcDesc">GitHub summary for an-account-login-long-enough-to-crowd-its-band: -1099511627776 repository views in the last 12345678901234567 days, -1099511627776 unique visitors in the last 12345678901234567 days, -1099511627776 clones in the last 12345678901234567 days, -1099511627776 pull requests in the last year, -1099511627776 contributions in the last year, -1099511627776 stars, -1099511627776 forks, -1099511627776 followers, -1099511627776 public repositories, -1099511627776 commits in the last year, -1099511627776 reviews in the last year, -1099511627776 issues in the last year. Contributions per day over the last 3 days, peaking at 5.</desc>
+<style>
+.bg{fill:#0d1117;stroke:#30363d}
+.panel{fill:#161b22}
+.t,.v,.big{fill:#e6edf3}
+.d,.l,.h,.s{fill:#8b949e}
+.n,.c{fill:#c9d1d9}
+.star,.pill-v{fill:#e3b341}
+.on-accent{fill:#0d1117}
+.line{stroke:#58a6ff}
+.area{fill:#58a6ff}
+.axis,.edge{stroke:#30363d}
+.track{fill:#30363d}
+.ok{fill:#3fb950}
+.fg{fill:#e6edf3}
+.h0{fill:#151b23}.h1{fill:#033a16}.h2{fill:#196c2e}.h3{fill:#2ea043}.h4{fill:#56d364}
+text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif}
+.mono{font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace}
+.t{font-size:18px;font-weight:600}
+.d{font-size:11px}
+.v{font-size:16px;font-weight:600}
+.big{font-size:24px;font-weight:700}
+.l{font-size:11px}
+.h{font-size:10px;font-weight:600;letter-spacing:0.08em}
+.n{font-size:12px}
+.s{font-size:11px}
+.c{font-size:12px}
+.line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.area{fill-opacity:0.14;stroke:none}
+.axis{stroke-width:1}
+.edge{fill:none;stroke-width:1}
+.cuf{opacity:0}
+.m0{animation:m0 1.6s linear 1}
+@keyframes m0{0%,5.46%{opacity:1}5.47%,100%{opacity:0}}
+.m1{animation:m1 1.6s linear 1}
+@keyframes m1{0%,5.46%{opacity:0}5.47%,10.93%{opacity:1}10.94%,100%{opacity:0}}
+.m2{animation:m2 1.6s linear 1}
+@keyframes m2{0%,10.93%{opacity:0}10.94%,16.4%{opacity:1}16.41%,100%{opacity:0}}
+.m3{animation:m3 1.6s linear 1}
+@keyframes m3{0%,16.4%{opacity:0}16.41%,21.86%{opacity:1}21.88%,100%{opacity:0}}
+.m4{animation:m4 1.6s linear 1}
+@keyframes m4{0%,21.86%{opacity:0}21.88%,27.33%{opacity:1}27.34%,100%{opacity:0}}
+.m5{animation:m5 1.6s linear 1}
+@keyframes m5{0%,27.33%{opacity:0}27.34%,32.8%{opacity:1}32.81%,100%{opacity:0}}
+.m6{animation:m6 1.6s linear 1}
+@keyframes m6{0%,32.8%{opacity:0}32.81%,38.27%{opacity:1}38.28%,100%{opacity:0}}
+.m7{animation:m7 1.6s linear 1}
+@keyframes m7{0%,38.27%{opacity:0}38.28%,43.74%{opacity:1}43.75%,100%{opacity:0}}
+.m8{animation:m8 1.6s linear 1}
+@keyframes m8{0%,43.74%{opacity:0}43.75%,49.21%{opacity:1}49.22%,100%{opacity:0}}
+.m9{animation:m9 1.6s linear 1}
+@keyframes m9{0%,49.21%{opacity:0}49.22%,54.68%{opacity:1}54.69%,100%{opacity:0}}
+.m10{animation:m10 1.6s linear 1}
+@keyframes m10{0%,54.68%{opacity:0}54.69%,60.15%{opacity:1}60.16%,100%{opacity:0}}
+.m11{animation:m11 1.6s linear 1}
+@keyframes m11{0%,60.15%{opacity:0}60.16%,65.61%{opacity:1}65.62%,100%{opacity:0}}
+.m12{animation:m12 1.6s linear 1}
+@keyframes m12{0%,65.61%{opacity:0}65.62%,71.08%{opacity:1}71.09%,100%{opacity:0}}
+.m13{animation:m13 1.6s linear 1}
+@keyframes m13{0%,71.08%{opacity:0}71.09%,76.55%{opacity:1}76.56%,100%{opacity:0}}
+.m14{animation:m14 1.6s linear 1}
+@keyframes m14{0%,76.55%{opacity:0}76.56%,82.02%{opacity:1}82.03%,100%{opacity:0}}
+.m15{animation:m15 1.6s linear 1}
+@keyframes m15{0%,82.02%{opacity:0}82.03%,87.49%{opacity:1}87.5%,100%{opacity:0}}
+.m16{animation:m16 1.6s linear 1}
+@keyframes m16{0%,87.49%{opacity:0}87.5%,100%{opacity:1}}
+.m17{animation:m17 1.6s ease-out 1}
+@keyframes m17{0%{opacity:0}100%{opacity:1}}
+.m18{animation:m18 1.6s ease-out 1}
+@keyframes m18{0%{stroke-dasharray:1;stroke-dashoffset:1}100%{stroke-dasharray:1;stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){.m0,.m1,.m2,.m3,.m4,.m5,.m6,.m7,.m8,.m9,.m10,.m11,.m12,.m13,.m14,.m15,.m16,.m17,.m18{animation:none}}
+</style>
+<rect class="bg" x="0.5" y="0.5" width="299" height="347" rx="6"/>
+<text class="t" x="25" y="34" text-anchor="start">A heading far too long for any…</text>
+<text class="d" x="25" y="52" text-anchor="start">A biography A biography A biography A biograph…</text>
+<text class="big cuf m0" x="25" y="92" text-anchor="start">0</text>
+<text class="big cuf m1" x="25" y="92" text-anchor="start">-193…</text>
+<text class="big cuf m2" x="25" y="92" text-anchor="start">-362…</text>
+<text class="big cuf m3" x="25" y="92" text-anchor="start">-509…</text>
+<text class="big cuf m4" x="25" y="92" text-anchor="start">-635…</text>
+<text class="big cuf m5" x="25" y="92" text-anchor="start">-742…</text>
+<text class="big cuf m6" x="25" y="92" text-anchor="start">-831…</text>
+<text class="big cuf m7" x="25" y="92" text-anchor="start">-903…</text>
+<text class="big cuf m8" x="25" y="92" text-anchor="start">-962…</text>
+<text class="big cuf m9" x="25" y="92" text-anchor="start">-100…</text>
+<text class="big cuf m10" x="25" y="92" text-anchor="start">-104…</text>
+<text class="big cuf m11" x="25" y="92" text-anchor="start">-106…</text>
+<text class="big cuf m12" x="25" y="92" text-anchor="start">-108…</text>
+<text class="big cuf m13" x="25" y="92" text-anchor="start">-109…</text>
+<text class="big cuf m14" x="25" y="92" text-anchor="start">-109…</text>
+<text class="big cuf m15" x="25" y="92" text-anchor="start">-109…</text>
+<text class="big cuz m16" x="25" y="92" text-anchor="start">-109…</text>
+<text class="l" x="25" y="108" text-anchor="start">Views (12345…</text>
+<text class="big cuf m0" x="108.33" y="92" text-anchor="start">0</text>
+<text class="big cuf m1" x="108.33" y="92" text-anchor="start">-193…</text>
+<text class="big cuf m2" x="108.33" y="92" text-anchor="start">-362…</text>
+<text class="big cuf m3" x="108.33" y="92" text-anchor="start">-509…</text>
+<text class="big cuf m4" x="108.33" y="92" text-anchor="start">-635…</text>
+<text class="big cuf m5" x="108.33" y="92" text-anchor="start">-742…</text>
+<text class="big cuf m6" x="108.33" y="92" text-anchor="start">-831…</text>
+<text class="big cuf m7" x="108.33" y="92" text-anchor="start">-903…</text>
+<text class="big cuf m8" x="108.33" y="92" text-anchor="start">-962…</text>
+<text class="big cuf m9" x="108.33" y="92" text-anchor="start">-100…</text>
+<text class="big cuf m10" x="108.33" y="92" text-anchor="start">-104…</text>
+<text class="big cuf m11" x="108.33" y="92" text-anchor="start">-106…</text>
+<text class="big cuf m12" x="108.33" y="92" text-anchor="start">-108…</text>
+<text class="big cuf m13" x="108.33" y="92" text-anchor="start">-109…</text>
+<text class="big cuf m14" x="108.33" y="92" text-anchor="start">-109…</text>
+<text class="big cuf m15" x="108.33" y="92" text-anchor="start">-109…</text>
+<text class="big cuz m16" x="108.33" y="92" text-anchor="start">-109…</text>
+<text class="l" x="108.33" y="108" text-anchor="start">Visitors (123…</text>
+<text class="big cuf m0" x="191.67" y="92" text-anchor="start">0</text>
+<text class="big cuf m1" x="191.67" y="92" text-anchor="start">-193…</text>
+<text class="big cuf m2" x="191.67" y="92" text-anchor="start">-362…</text>
+<text class="big cuf m3" x="191.67" y="92" text-anchor="start">-509…</text>
+<text class="big cuf m4" x="191.67" y="92" text-anchor="start">-635…</text>
+<text class="big cuf m5" x="191.67" y="92" text-anchor="start">-742…</text>
+<text class="big cuf m6" x="191.67" y="92" text-anchor="start">-831…</text>
+<text class="big cuf m7" x="191.67" y="92" text-anchor="start">-903…</text>
+<text class="big cuf m8" x="191.67" y="92" text-anchor="start">-962…</text>
+<text class="big cuf m9" x="191.67" y="92" text-anchor="start">-100…</text>
+<text class="big cuf m10" x="191.67" y="92" text-anchor="start">-104…</text>
+<text class="big cuf m11" x="191.67" y="92" text-anchor="start">-106…</text>
+<text class="big cuf m12" x="191.67" y="92" text-anchor="start">-108…</text>
+<text class="big cuf m13" x="191.67" y="92" text-anchor="start">-109…</text>
+<text class="big cuf m14" x="191.67" y="92" text-anchor="start">-109…</text>
+<text class="big cuf m15" x="191.67" y="92" text-anchor="start">-109…</text>
+<text class="big cuz m16" x="191.67" y="92" text-anchor="start">-109…</text>
+<text class="l" x="191.67" y="108" text-anchor="start">Clones (1234…</text>
+<text class="big cuf m0" x="25" y="142" text-anchor="start">0</text>
+<text class="big cuf m1" x="25" y="142" text-anchor="start">-193…</text>
+<text class="big cuf m2" x="25" y="142" text-anchor="start">-362…</text>
+<text class="big cuf m3" x="25" y="142" text-anchor="start">-509…</text>
+<text class="big cuf m4" x="25" y="142" text-anchor="start">-635…</text>
+<text class="big cuf m5" x="25" y="142" text-anchor="start">-742…</text>
+<text class="big cuf m6" x="25" y="142" text-anchor="start">-831…</text>
+<text class="big cuf m7" x="25" y="142" text-anchor="start">-903…</text>
+<text class="big cuf m8" x="25" y="142" text-anchor="start">-962…</text>
+<text class="big cuf m9" x="25" y="142" text-anchor="start">-100…</text>
+<text class="big cuf m10" x="25" y="142" text-anchor="start">-104…</text>
+<text class="big cuf m11" x="25" y="142" text-anchor="start">-106…</text>
+<text class="big cuf m12" x="25" y="142" text-anchor="start">-108…</text>
+<text class="big cuf m13" x="25" y="142" text-anchor="start">-109…</text>
+<text class="big cuf m14" x="25" y="142" text-anchor="start">-109…</text>
+<text class="big cuf m15" x="25" y="142" text-anchor="start">-109…</text>
+<text class="big cuz m16" x="25" y="142" text-anchor="start">-109…</text>
+<text class="l" x="25" y="158" text-anchor="start">Pull requests…</text>
+<text class="big cuf m0" x="108.33" y="142" text-anchor="start">0</text>
+<text class="big cuf m1" x="108.33" y="142" text-anchor="start">-193…</text>
+<text class="big cuf m2" x="108.33" y="142" text-anchor="start">-362…</text>
+<text class="big cuf m3" x="108.33" y="142" text-anchor="start">-509…</text>
+<text class="big cuf m4" x="108.33" y="142" text-anchor="start">-635…</text>
+<text class="big cuf m5" x="108.33" y="142" text-anchor="start">-742…</text>
+<text class="big cuf m6" x="108.33" y="142" text-anchor="start">-831…</text>
+<text class="big cuf m7" x="108.33" y="142" text-anchor="start">-903…</text>
+<text class="big cuf m8" x="108.33" y="142" text-anchor="start">-962…</text>
+<text class="big cuf m9" x="108.33" y="142" text-anchor="start">-100…</text>
+<text class="big cuf m10" x="108.33" y="142" text-anchor="start">-104…</text>
+<text class="big cuf m11" x="108.33" y="142" text-anchor="start">-106…</text>
+<text class="big cuf m12" x="108.33" y="142" text-anchor="start">-108…</text>
+<text class="big cuf m13" x="108.33" y="142" text-anchor="start">-109…</text>
+<text class="big cuf m14" x="108.33" y="142" text-anchor="start">-109…</text>
+<text class="big cuf m15" x="108.33" y="142" text-anchor="start">-109…</text>
+<text class="big cuz m16" x="108.33" y="142" text-anchor="start">-109…</text>
+<text class="l" x="108.33" y="158" text-anchor="start">Contributions…</text>
+<text class="big cuf m0" x="191.67" y="142" text-anchor="start">0</text>
+<text class="big cuf m1" x="191.67" y="142" text-anchor="start">-193…</text>
+<text class="big cuf m2" x="191.67" y="142" text-anchor="start">-362…</text>
+<text class="big cuf m3" x="191.67" y="142" text-anchor="start">-509…</text>
+<text class="big cuf m4" x="191.67" y="142" text-anchor="start">-635…</text>
+<text class="big cuf m5" x="191.67" y="142" text-anchor="start">-742…</text>
+<text class="big cuf m6" x="191.67" y="142" text-anchor="start">-831…</text>
+<text class="big cuf m7" x="191.67" y="142" text-anchor="start">-903…</text>
+<text class="big cuf m8" x="191.67" y="142" text-anchor="start">-962…</text>
+<text class="big cuf m9" x="191.67" y="142" text-anchor="start">-100…</text>
+<text class="big cuf m10" x="191.67" y="142" text-anchor="start">-104…</text>
+<text class="big cuf m11" x="191.67" y="142" text-anchor="start">-106…</text>
+<text class="big cuf m12" x="191.67" y="142" text-anchor="start">-108…</text>
+<text class="big cuf m13" x="191.67" y="142" text-anchor="start">-109…</text>
+<text class="big cuf m14" x="191.67" y="142" text-anchor="start">-109…</text>
+<text class="big cuf m15" x="191.67" y="142" text-anchor="start">-109…</text>
+<text class="big cuz m16" x="191.67" y="142" text-anchor="start">-109…</text>
+<text class="l" x="191.67" y="158" text-anchor="start">Stars</text>
+<text class="big cuf m0" x="25" y="192" text-anchor="start">0</text>
+<text class="big cuf m1" x="25" y="192" text-anchor="start">-193…</text>
+<text class="big cuf m2" x="25" y="192" text-anchor="start">-362…</text>
+<text class="big cuf m3" x="25" y="192" text-anchor="start">-509…</text>
+<text class="big cuf m4" x="25" y="192" text-anchor="start">-635…</text>
+<text class="big cuf m5" x="25" y="192" text-anchor="start">-742…</text>
+<text class="big cuf m6" x="25" y="192" text-anchor="start">-831…</text>
+<text class="big cuf m7" x="25" y="192" text-anchor="start">-903…</text>
+<text class="big cuf m8" x="25" y="192" text-anchor="start">-962…</text>
+<text class="big cuf m9" x="25" y="192" text-anchor="start">-100…</text>
+<text class="big cuf m10" x="25" y="192" text-anchor="start">-104…</text>
+<text class="big cuf m11" x="25" y="192" text-anchor="start">-106…</text>
+<text class="big cuf m12" x="25" y="192" text-anchor="start">-108…</text>
+<text class="big cuf m13" x="25" y="192" text-anchor="start">-109…</text>
+<text class="big cuf m14" x="25" y="192" text-anchor="start">-109…</text>
+<text class="big cuf m15" x="25" y="192" text-anchor="start">-109…</text>
+<text class="big cuz m16" x="25" y="192" text-anchor="start">-109…</text>
+<text class="l" x="25" y="208" text-anchor="start">Forks</text>
+<text class="big cuf m0" x="108.33" y="192" text-anchor="start">0</text>
+<text class="big cuf m1" x="108.33" y="192" text-anchor="start">-193…</text>
+<text class="big cuf m2" x="108.33" y="192" text-anchor="start">-362…</text>
+<text class="big cuf m3" x="108.33" y="192" text-anchor="start">-509…</text>
+<text class="big cuf m4" x="108.33" y="192" text-anchor="start">-635…</text>
+<text class="big cuf m5" x="108.33" y="192" text-anchor="start">-742…</text>
+<text class="big cuf m6" x="108.33" y="192" text-anchor="start">-831…</text>
+<text class="big cuf m7" x="108.33" y="192" text-anchor="start">-903…</text>
+<text class="big cuf m8" x="108.33" y="192" text-anchor="start">-962…</text>
+<text class="big cuf m9" x="108.33" y="192" text-anchor="start">-100…</text>
+<text class="big cuf m10" x="108.33" y="192" text-anchor="start">-104…</text>
+<text class="big cuf m11" x="108.33" y="192" text-anchor="start">-106…</text>
+<text class="big cuf m12" x="108.33" y="192" text-anchor="start">-108…</text>
+<text class="big cuf m13" x="108.33" y="192" text-anchor="start">-109…</text>
+<text class="big cuf m14" x="108.33" y="192" text-anchor="start">-109…</text>
+<text class="big cuf m15" x="108.33" y="192" text-anchor="start">-109…</text>
+<text class="big cuz m16" x="108.33" y="192" text-anchor="start">-109…</text>
+<text class="l" x="108.33" y="208" text-anchor="start">Followers</text>
+<text class="big cuf m0" x="191.67" y="192" text-anchor="start">0</text>
+<text class="big cuf m1" x="191.67" y="192" text-anchor="start">-193…</text>
+<text class="big cuf m2" x="191.67" y="192" text-anchor="start">-362…</text>
+<text class="big cuf m3" x="191.67" y="192" text-anchor="start">-509…</text>
+<text class="big cuf m4" x="191.67" y="192" text-anchor="start">-635…</text>
+<text class="big cuf m5" x="191.67" y="192" text-anchor="start">-742…</text>
+<text class="big cuf m6" x="191.67" y="192" text-anchor="start">-831…</text>
+<text class="big cuf m7" x="191.67" y="192" text-anchor="start">-903…</text>
+<text class="big cuf m8" x="191.67" y="192" text-anchor="start">-962…</text>
+<text class="big cuf m9" x="191.67" y="192" text-anchor="start">-100…</text>
+<text class="big cuf m10" x="191.67" y="192" text-anchor="start">-104…</text>
+<text class="big cuf m11" x="191.67" y="192" text-anchor="start">-106…</text>
+<text class="big cuf m12" x="191.67" y="192" text-anchor="start">-108…</text>
+<text class="big cuf m13" x="191.67" y="192" text-anchor="start">-109…</text>
+<text class="big cuf m14" x="191.67" y="192" text-anchor="start">-109…</text>
+<text class="big cuf m15" x="191.67" y="192" text-anchor="start">-109…</text>
+<text class="big cuz m16" x="191.67" y="192" text-anchor="start">-109…</text>
+<text class="l" x="191.67" y="208" text-anchor="start">Repositories</text>
+<text class="big cuf m0" x="25" y="242" text-anchor="start">0</text>
+<text class="big cuf m1" x="25" y="242" text-anchor="start">-193…</text>
+<text class="big cuf m2" x="25" y="242" text-anchor="start">-362…</text>
+<text class="big cuf m3" x="25" y="242" text-anchor="start">-509…</text>
+<text class="big cuf m4" x="25" y="242" text-anchor="start">-635…</text>
+<text class="big cuf m5" x="25" y="242" text-anchor="start">-742…</text>
+<text class="big cuf m6" x="25" y="242" text-anchor="start">-831…</text>
+<text class="big cuf m7" x="25" y="242" text-anchor="start">-903…</text>
+<text class="big cuf m8" x="25" y="242" text-anchor="start">-962…</text>
+<text class="big cuf m9" x="25" y="242" text-anchor="start">-100…</text>
+<text class="big cuf m10" x="25" y="242" text-anchor="start">-104…</text>
+<text class="big cuf m11" x="25" y="242" text-anchor="start">-106…</text>
+<text class="big cuf m12" x="25" y="242" text-anchor="start">-108…</text>
+<text class="big cuf m13" x="25" y="242" text-anchor="start">-109…</text>
+<text class="big cuf m14" x="25" y="242" text-anchor="start">-109…</text>
+<text class="big cuf m15" x="25" y="242" text-anchor="start">-109…</text>
+<text class="big cuz m16" x="25" y="242" text-anchor="start">-109…</text>
+<text class="l" x="25" y="258" text-anchor="start">Commits (1y)</text>
+<text class="big cuf m0" x="108.33" y="242" text-anchor="start">0</text>
+<text class="big cuf m1" x="108.33" y="242" text-anchor="start">-193…</text>
+<text class="big cuf m2" x="108.33" y="242" text-anchor="start">-362…</text>
+<text class="big cuf m3" x="108.33" y="242" text-anchor="start">-509…</text>
+<text class="big cuf m4" x="108.33" y="242" text-anchor="start">-635…</text>
+<text class="big cuf m5" x="108.33" y="242" text-anchor="start">-742…</text>
+<text class="big cuf m6" x="108.33" y="242" text-anchor="start">-831…</text>
+<text class="big cuf m7" x="108.33" y="242" text-anchor="start">-903…</text>
+<text class="big cuf m8" x="108.33" y="242" text-anchor="start">-962…</text>
+<text class="big cuf m9" x="108.33" y="242" text-anchor="start">-100…</text>
+<text class="big cuf m10" x="108.33" y="242" text-anchor="start">-104…</text>
+<text class="big cuf m11" x="108.33" y="242" text-anchor="start">-106…</text>
+<text class="big cuf m12" x="108.33" y="242" text-anchor="start">-108…</text>
+<text class="big cuf m13" x="108.33" y="242" text-anchor="start">-109…</text>
+<text class="big cuf m14" x="108.33" y="242" text-anchor="start">-109…</text>
+<text class="big cuf m15" x="108.33" y="242" text-anchor="start">-109…</text>
+<text class="big cuz m16" x="108.33" y="242" text-anchor="start">-109…</text>
+<text class="l" x="108.33" y="258" text-anchor="start">Reviews (1y)</text>
+<text class="big cuf m0" x="191.67" y="242" text-anchor="start">0</text>
+<text class="big cuf m1" x="191.67" y="242" text-anchor="start">-193…</text>
+<text class="big cuf m2" x="191.67" y="242" text-anchor="start">-362…</text>
+<text class="big cuf m3" x="191.67" y="242" text-anchor="start">-509…</text>
+<text class="big cuf m4" x="191.67" y="242" text-anchor="start">-635…</text>
+<text class="big cuf m5" x="191.67" y="242" text-anchor="start">-742…</text>
+<text class="big cuf m6" x="191.67" y="242" text-anchor="start">-831…</text>
+<text class="big cuf m7" x="191.67" y="242" text-anchor="start">-903…</text>
+<text class="big cuf m8" x="191.67" y="242" text-anchor="start">-962…</text>
+<text class="big cuf m9" x="191.67" y="242" text-anchor="start">-100…</text>
+<text class="big cuf m10" x="191.67" y="242" text-anchor="start">-104…</text>
+<text class="big cuf m11" x="191.67" y="242" text-anchor="start">-106…</text>
+<text class="big cuf m12" x="191.67" y="242" text-anchor="start">-108…</text>
+<text class="big cuf m13" x="191.67" y="242" text-anchor="start">-109…</text>
+<text class="big cuf m14" x="191.67" y="242" text-anchor="start">-109…</text>
+<text class="big cuf m15" x="191.67" y="242" text-anchor="start">-109…</text>
+<text class="big cuz m16" x="191.67" y="242" text-anchor="start">-109…</text>
+<text class="l" x="191.67" y="258" text-anchor="start">Issues (1y)</text>
+<text class="h" x="25" y="282" text-anchor="start">CONTRIBUTIONS PER DAY</text>
+<line class="axis" x1="25" y1="332" x2="275" y2="332"/>
+<path class="area m17" d="M25,332 L25,323.2 L150,288 L275,314.4 L275,332Z"/>
+<polyline class="line m18" pathLength="1" points="25,323.2 150,288 275,314.4"/>
+</svg>

@@ -97,6 +97,11 @@ type Options struct {
 	// empty means the layout's default set. A field the layout does not
 	// support is skipped, an unknown one is an error.
 	Fields []string
+
+	// Motion is how an animated layout moves: MotionOnce, MotionLoop or
+	// MotionOff. Empty means MotionOnce. A layout that does not move accepts
+	// every valid value and draws the same card.
+	Motion string
 }
 
 const (
@@ -226,6 +231,13 @@ func SVG(c *Card, o *Options) ([]byte, error) {
 	if theme != "auto" && theme != "dark" && theme != "light" {
 		return nil, fmt.Errorf("%w: %q", ErrTheme, o.Theme)
 	}
+	motion := o.Motion
+	if motion == "" {
+		motion = MotionOnce
+	}
+	if motion != MotionOnce && motion != MotionLoop && motion != MotionOff {
+		return nil, fmt.Errorf("%w: %q (valid: %s, %s, %s)", ErrMotion, o.Motion, MotionOnce, MotionLoop, MotionOff)
+	}
 	def, err := findLayout(o.Layout)
 	if err != nil {
 		return nil, err
@@ -255,6 +267,7 @@ func SVG(c *Card, o *Options) ([]byte, error) {
 		nums:   metricsOf(c, fields),
 		repos:  rank(c.TopRepos, maxRepos),
 		langs:  rankLanguages(c.Languages, maxLanguages),
+		motion: motion,
 	}
 	if !s.has(fieldTopRepos) {
 		s.repos = nil
@@ -280,6 +293,7 @@ type spec struct {
 	nums   []metric
 	repos  []TopRepo
 	langs  []langShare
+	motion string // already validated
 }
 
 func (s *spec) has(field string) bool {
@@ -448,7 +462,7 @@ const chronicleCSS = `text{font-family:-apple-system,BlinkMacSystemFont,'Segoe U
 .s{font-size:11px}
 .c{font-size:12px}
 .line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.area{opacity:0.14;stroke:none}
+.area{fill-opacity:0.14;stroke:none}
 .axis{stroke-width:1}
 .edge{fill:none;stroke-width:1}
 `
@@ -467,7 +481,7 @@ const githubCSS = `text{font-family:` + fontSans + `}
 .s{font-size:11px}
 .c{font-size:13px;font-weight:500;font-family:` + fontMono + `}
 .line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.area{opacity:0.12;stroke:none}
+.area{fill-opacity:0.12;stroke:none}
 .axis{stroke-width:1}
 .edge{fill:none;stroke-width:1}
 `
@@ -559,9 +573,23 @@ func describeSparkline(b *strings.Builder, days []int) {
 	fmt.Fprintf(b, " Contributions per day over the last %d days, peaking at %d.", len(days), peak)
 }
 
-// drawSparkline draws the line and its area into the box. animated adds the
-// draw-itself classes; the CSS behind them is the layout's business.
-func drawSparkline(b *strings.Builder, values []int, x0, y0, w, h float64, animated bool) {
+// sparkMotion is the class each part of the sparkline plays, from sparkBeats.
+// The zero value draws a line that does not move.
+type sparkMotion struct{ area, line string }
+
+// sparkBeats places the sparkline's two beats on a card's timeline: the area
+// fades in while the line draws itself, both over the first 1.6 seconds.
+func sparkBeats(tl *timeline) sparkMotion {
+	return sparkMotion{
+		area: tl.add(effectFade, 0, 1.6, "ease-out"),
+		line: tl.add(effectDraw, 0, 1.6, "ease-out"),
+	}
+}
+
+// drawSparkline draws the line and its area into the box. m names the classes
+// that play the two beats sparkBeats placed on the timeline; the zero value
+// draws a line that does not move.
+func drawSparkline(b *strings.Builder, values []int, x0, y0, w, h float64, m sparkMotion) {
 	pts := sparkPoints(values, x0, y0, w, h)
 	var area, line strings.Builder
 	fmt.Fprintf(&area, "M%s,%s", num(x0), num(y0+h))
@@ -574,15 +602,14 @@ func drawSparkline(b *strings.Builder, values []int, x0, y0, w, h float64, anima
 	}
 	fmt.Fprintf(&area, " L%s,%sZ", num(x0+w), num(y0+h))
 
-	if animated {
-		fmt.Fprintf(b, `<path class="area fade" d="%s"/>`+"\n", area.String())
-		// pathLength normalizes the dash to one unit so the CSS does not have
-		// to know how long the line is.
-		fmt.Fprintf(b, `<polyline class="line draw" pathLength="1" points="%s"/>`+"\n", line.String())
+	fmt.Fprintf(b, `<path class="%s" d="%s"/>`+"\n", classes("area", m.area), area.String())
+	if m.line == "" {
+		fmt.Fprintf(b, `<polyline class="line" points="%s"/>`+"\n", line.String())
 		return
 	}
-	fmt.Fprintf(b, `<path class="area" d="%s"/>`+"\n", area.String())
-	fmt.Fprintf(b, `<polyline class="line" points="%s"/>`+"\n", line.String())
+	// pathLength normalizes the dash to one unit so the CSS does not have to
+	// know how long the line is.
+	fmt.Fprintf(b, `<polyline class="%s" pathLength="1" points="%s"/>`+"\n", classes("line", m.line), line.String())
 }
 
 type point struct{ x, y float64 }

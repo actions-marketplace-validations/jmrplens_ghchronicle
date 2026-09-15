@@ -359,6 +359,7 @@ func TestExecuteCardDrawsTheSweep(t *testing.T) {
 		{"a theme there is none of", []string{"-card", svg, "-card-theme", "neon"}, `"neon"`},
 		{"a field there is none of", []string{"-card", svg, "-card-fields", "stars,karma"}, "karma"},
 		{"a directory that is not there", []string{"-card", unreachable}, notFoundText(t, unreachable)},
+		{"a motion there is none of", []string{"-card", svg, "-card-motion", "bounce"}, `"bounce"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			failed := runCommand(t, append([]string{"-config", cfg, "-card-only"}, tc.args...)...)
@@ -367,6 +368,58 @@ func TestExecuteCardDrawsTheSweep(t *testing.T) {
 				t.Errorf("status %d, want 1 and %q in:\n%s", failed.status, tc.stderr, failed.stderr)
 			}
 		})
+	}
+}
+
+// TestExecuteBothThemesComeFromOneSweep writes the light and the dark card of
+// one sweep, so the two pictures of a <picture> element can never show numbers
+// from different moments, and passes the motion through to both.
+func TestExecuteBothThemesComeFromOneSweep(t *testing.T) {
+	gh := fakegh.New(t, fixtures)
+	dir := t.TempDir()
+	cfg := writeConfig(t, dir, gh.URL(), "")
+	light := filepath.Join(dir, "card.svg")
+	dark := filepath.Join(dir, "card_dark.svg")
+
+	got := runCommand(t, "-config", cfg, "-card", light, "-card-only",
+		"-card-layout", "sparkline-hero", "-card-theme", "both", "-card-motion", "loop")
+	if got.status != notExited {
+		t.Fatalf("-card-theme both = %d:\n%s", got.status, got.stderr)
+	}
+	lightSVG, err := os.ReadFile(light)
+	if err != nil {
+		t.Fatal(err)
+	}
+	darkSVG, err := os.ReadFile(dark)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(lightSVG), "#ffffff") || !strings.Contains(string(darkSVG), "#0d1117") {
+		t.Error("the light card must carry the light palette and the dark card the dark one")
+	}
+	for name, body := range map[string][]byte{light: lightSVG, dark: darkSVG} {
+		if !strings.Contains(string(body), "infinite") {
+			t.Errorf("%s does not loop", name)
+		}
+	}
+	if strings.Count(got.stderr, "card written") != 2 {
+		t.Errorf("the log must say each card was written:\n%s", got.stderr)
+	}
+}
+
+// TestExecuteRefusesACardItCannotDrawBeforeItSweeps checks the options before
+// the sweep spends any of the rate limit on a card that was never going to be
+// written.
+func TestExecuteRefusesACardItCannotDrawBeforeItSweeps(t *testing.T) {
+	gh := fakegh.New(t, fixtures)
+	dir := t.TempDir()
+	cfg := writeConfig(t, dir, gh.URL(), "")
+	got := runCommand(t, "-config", cfg, "-card", filepath.Join(dir, "card.svg"), "-card-only", "-card-motion", "bounce")
+	if got.status != 1 || !strings.Contains(got.stderr, `"bounce"`) {
+		t.Fatalf("status %d, want 1 naming the motion:\n%s", got.status, got.stderr)
+	}
+	if strings.Contains(got.stderr, "sweep") {
+		t.Errorf("the run swept before it refused the card:\n%s", got.stderr)
 	}
 }
 
@@ -495,6 +548,40 @@ func TestExecuteRefusesAPortAlreadyHeld(t *testing.T) {
 	got := runCommand(t, "-config", cfg)
 	if got.status != 1 || !strings.Contains(got.stderr, "ghchronicle: prometheus exporter: ") {
 		t.Errorf("status %d, want 1 and the exporter named:\n%s", got.status, got.stderr)
+	}
+}
+
+// TestExecuteOneShotRunsLeaveTheExportersPortAlone runs each of the three
+// one-shot shapes with the exporter configured on a port a long-running
+// instance already holds, which is the ordinary case of a scheduled -card
+// beside a serving ghchronicle. Each is a one-shot on its own, not only in
+// company, so each must finish without trying to take the port.
+func TestExecuteOneShotRunsLeaveTheExportersPortAlone(t *testing.T) {
+	held, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = held.Close() })
+	gh := fakegh.New(t, fixtures)
+
+	for _, tc := range []struct {
+		name string
+		args func(dir string) []string
+	}{
+		{"-once", func(string) []string { return []string{"-once"} }},
+		{"-backfill", func(string) []string { return []string{"-backfill"} }},
+		{"-card", func(dir string) []string { return []string{"-card", filepath.Join(dir, "card.svg")} }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			cfg := writeConfig(t, dir, gh.URL(), collectorOnly+
+				"sinks:\n  prometheus:\n    listen: "+held.Addr().String()+"\n")
+			got := runCommand(t, append([]string{"-config", cfg}, tc.args(dir)...)...)
+			if got.status != notExited || strings.Contains(got.stderr, "prometheus exporter") {
+				t.Errorf("%s beside a held exporter port = %d, want a clean return:\n%s",
+					tc.name, got.status, got.stderr)
+			}
+		})
 	}
 }
 
@@ -687,6 +774,76 @@ func TestBuildSinksWithTheLedgerOff(t *testing.T) {
 	}
 	if strings.Contains(logs.String(), "ledger") {
 		t.Errorf("a ledger switched off was loaded:\n%s", logs.String())
+	}
+}
+
+// TestBuildSinksWritesJSONToStdoutOnlyWhenAskedFor tells the two stdout sinks
+// apart by what they are, because both are named "stdout": a count or a name
+// passes whichever of the two was built, and a pipeline reading JSON lines
+// that is handed line protocol breaks on the first point.
+func TestBuildSinksWritesJSONToStdoutOnlyWhenAskedFor(t *testing.T) {
+	logger, _ := newLogger(config.Log{Level: "error"}, io.Discard)
+	for _, tc := range []struct {
+		format string
+		json   bool
+	}{
+		{"json", true},
+		{"influx", false},
+		{"", false},
+	} {
+		t.Run("stdout_format "+tc.format, func(t *testing.T) {
+			cfg := &config.Config{Sinks: config.Sinks{Stdout: true, StdoutFormat: tc.format, DedupeFile: "off"}}
+			built, err := buildSinks(cfg, logger, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeAll(t, built)
+			if len(built) != 1 {
+				t.Fatalf("built %s, want stdout alone", sinkNames(built))
+			}
+			_, isJSON := built[0].(*sink.StdoutJSON)
+			_, isLines := built[0].(*sink.Stdout)
+			if isJSON != tc.json || isLines == tc.json {
+				t.Errorf("stdout_format %q built %T, want JSON %v", tc.format, built[0], tc.json)
+			}
+		})
+	}
+}
+
+// TestBuildSinksSkipsTheLedgerOnlyForASinkThatRefusesIt holds each store's
+// own dedupe key to the ledger: absent and true both mean the ledger decides
+// what is written again, and only false hands the store every point. A sink
+// wrapped when it asked not to be would silently drop what it asked to get.
+func TestBuildSinksSkipsTheLedgerOnlyForASinkThatRefusesIt(t *testing.T) {
+	on, off := true, false
+	logger, _ := newLogger(config.Log{Level: "error"}, io.Discard)
+	url := stores(t)
+	for _, tc := range []struct {
+		name   string
+		dedupe *bool
+		ledger bool
+	}{
+		{"the key absent", nil, true},
+		{"dedupe: true", &on, true},
+		{"dedupe: false", &off, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{Sinks: config.Sinks{
+				Telegraf:   &config.TelegrafSink{URL: url + "/telegraf", Batch: 10, Dedupe: tc.dedupe},
+				DedupeFile: filepath.Join(t.TempDir(), "written.bin"),
+			}}
+			built, err := buildSinks(cfg, logger, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeAll(t, built)
+			if len(built) != 1 {
+				t.Fatalf("built %s, want telegraf alone", sinkNames(built))
+			}
+			if _, wrapped := built[0].(*sink.Unchanged); wrapped != tc.ledger {
+				t.Errorf("%s built %T, want it behind the ledger: %v", tc.name, built[0], tc.ledger)
+			}
+		})
 	}
 }
 

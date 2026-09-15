@@ -106,6 +106,7 @@ type options struct {
 	theme    string
 	layout   string
 	fields   string
+	motion   string
 	layouts  bool
 	cardOnly bool
 	groups   bool
@@ -132,10 +133,13 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs.StringVar(&o.since, "backfill-since", "",
 		"bound the backfill: a date (2024-01-01), a duration (720h), days (90d) or years (2y); empty means no bound")
 	fs.StringVar(&o.card, "card", "", "run one sweep and write a summary SVG to this path")
-	fs.StringVar(&o.theme, "card-theme", "auto", "card theme: dark, light or auto")
+	fs.StringVar(&o.theme, "card-theme", "auto",
+		"card theme: dark, light, auto, or both to write the light card at -card and the dark one beside it with _dark before the extension")
 	fs.StringVar(&o.layout, "card-layout", "summary", "card layout; see -card-layouts")
 	fs.StringVar(&o.fields, "card-fields", "",
 		"comma-separated fields the card shows; empty means the layout's default")
+	fs.StringVar(&o.motion, "card-motion", render.MotionOnce,
+		"how an animated layout moves: once, loop or off; a layout that does not move ignores it")
 	fs.BoolVar(&o.layouts, "card-layouts", false, "list the card layouts and their fields, then exit")
 	fs.BoolVar(&o.groups, "groups", false, "list the metric groups and the families in each, then exit")
 	fs.BoolVar(&o.cardOnly, "card-only", false, "with -card, write the SVG and nothing else")
@@ -420,29 +424,92 @@ func runBackfill(ctx context.Context, runner *run.Runner, cfg *config.Config,
 }
 
 // runSweep runs one sweep and, when one was asked for, draws the card from
-// what that sweep collected.
+// what that sweep collected. Under -card-theme both that is the light card at
+// -card and the dark one beside it with _dark before the extension, both from
+// the one sweep, so the two can never disagree about the moment they show.
 func runSweep(ctx context.Context, runner *run.Runner, accumulator *render.Accumulator,
 	o *options, logger *slog.Logger,
 ) error {
+	files := cardFiles(o.card, o.theme)
+	if accumulator != nil {
+		if err := checkCardFiles(o, files); err != nil {
+			return err
+		}
+	}
 	if err := runner.Once(ctx); err != nil {
 		return err
 	}
 	if accumulator == nil {
 		return nil
 	}
-	opts := &render.Options{Theme: o.theme, Layout: o.layout}
-	if o.fields != "" {
-		opts.Fields = strings.Split(o.fields, ",")
-		for i := range opts.Fields {
-			opts.Fields[i] = strings.TrimSpace(opts.Fields[i])
+	built := accumulator.Card()
+	for _, f := range files {
+		if err := writeCard(f.path, &built, f.opts); err != nil {
+			return err
+		}
+		logger.Info("card written", "path", f.path, "theme", f.theme, "motion", o.motion)
+	}
+	return nil
+}
+
+// splitFields turns the comma-separated -card-fields flag into the trimmed
+// field names render.Options takes; empty stays nil so the layout's default
+// applies.
+func splitFields(fields string) []string {
+	if fields == "" {
+		return nil
+	}
+	out := strings.Split(fields, ",")
+	for i := range out {
+		out[i] = strings.TrimSpace(out[i])
+	}
+	return out
+}
+
+// checkCardFiles settles each file's options and renders a placeholder card
+// with them before the sweep, because a typo in the theme, the motion or a
+// field found after the sweep has already spent the rate limit on a card that
+// was never going to be written. It sets files[i].opts rather than building a
+// second value later: the write loop draws with this exact *render.Options,
+// never a value cardOptions was asked to build again, so what is checked here
+// is what is drawn, not something that merely looks the same today.
+func checkCardFiles(o *options, files []cardFile) error {
+	for i := range files {
+		files[i].opts = cardOptions(o, files[i].theme)
+		if _, err := render.SVG(&render.Card{Login: "check"}, files[i].opts); err != nil {
+			return err
 		}
 	}
-	built := accumulator.Card()
-	if err := writeCard(o.card, &built, opts); err != nil {
-		return err
-	}
-	logger.Info("card written", "path", o.card, "theme", o.theme)
 	return nil
+}
+
+// cardFile is one SVG a run writes, the palette it is drawn in, and the
+// options it is drawn with. opts starts nil: cardFiles only names the files
+// -card-theme asks for, and checkCardFiles fills it in from the one call to
+// cardOptions that both the placeholder check and the later write read from,
+// so the two can never draw from different options.
+type cardFile struct {
+	path, theme string
+	opts        *render.Options
+}
+
+// cardFiles is what -card-theme asks for: one file, or under both the light
+// card at the path given and the dark one beside it with _dark before the
+// extension, from the same sweep.
+func cardFiles(path, theme string) []cardFile {
+	if theme != "both" {
+		return []cardFile{{path: path, theme: theme}}
+	}
+	ext := filepath.Ext(path)
+	return []cardFile{
+		{path: path, theme: "light"},
+		{path: strings.TrimSuffix(path, ext) + "_dark" + ext, theme: "dark"},
+	}
+}
+
+// cardOptions turns the command line into the renderer's options for one theme.
+func cardOptions(o *options, theme string) *render.Options {
+	return &render.Options{Theme: theme, Layout: o.layout, Motion: o.motion, Fields: splitFields(o.fields)}
 }
 
 func buildSinks(cfg *config.Config, log *slog.Logger, oneShot bool) ([]sink.Sink, error) {
