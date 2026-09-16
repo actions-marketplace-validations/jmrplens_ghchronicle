@@ -13,20 +13,79 @@ const counterFrames = 16
 // counterDuration is how long a count takes, in seconds.
 const counterDuration = 1.4
 
+// counterMotion is the classes a counting number plays, from counterBeats.
+// The zero value writes the number once, which is what a card that does not
+// count shows.
+type counterMotion struct {
+	frames []string
+	final  string
+}
+
 // counterBeats places a count on the card's timeline: one flash per
 // intermediate frame, back to back, and a reveal for the final value when the
 // count ends. Every number on the card shares these classes, so they count
 // together. Under off it returns no frames, and the final class is "".
-func counterBeats(tl *timeline) (frames []string, final string) {
+func counterBeats(tl *timeline) counterMotion {
 	if !tl.moving() {
-		return nil, ""
+		return counterMotion{}
 	}
 	step := counterDuration / counterFrames
-	frames = make([]string, counterFrames)
+	frames := make([]string, counterFrames)
 	for i := range frames {
 		frames[i] = tl.add(effectFlash, float64(i)*step, step, "linear")
 	}
-	return frames, tl.add(effectReveal, counterDuration, 0, "linear")
+	return counterMotion{frames, tl.add(effectReveal, counterDuration, 0, "linear")}
+}
+
+// counterCSS is the one base rule a counting card needs: the intermediate
+// frames rest hidden, so a renderer that ignores animation, and a reader under
+// prefers-reduced-motion, are left with the settled value alone. A card with
+// no frames has nothing to hide and writes no rule.
+func counterCSS(m counterMotion) string {
+	if len(m.frames) == 0 {
+		return ""
+	}
+	return ".cuf{opacity:0}\n"
+}
+
+// countedNumber is one number on its way into the document: its value, where
+// it sits, how it is set and how much room it has. A struct and not a
+// parameter list, the way gridStyle and spec are: countUp took ten positional
+// arguments, six of them a float64 or a string, which is the shape where a
+// caller passes the right type in the wrong place and nothing notices. Named
+// fields make a call site say which is the size and which is the limit.
+type countedNumber struct {
+	value         int
+	x, y          float64
+	class, anchor string
+	// size is the type size the text is measured at, limit the width it must
+	// fit into; both are handed to fit, which truncates to an ellipsis.
+	size, limit float64
+	// format writes the value out the way the layout's family does: compact
+	// for chronicle, grouped for github.
+	format func(int) string
+}
+
+// countUp writes one number as the stack a count is made of: an intermediate
+// value per frame, each shown only during its own beat, and the real value on
+// top of them, revealed when the count lands. The marker classes go on only
+// where there are frames, so a grid that does not count writes the number with
+// the class it has always had and nothing else.
+//
+// It is shared rather than copied because two layouts count now: animated-counters
+// draws its own grid and statGrid draws the github family's.
+func countUp(b *strings.Builder, n countedNumber, motion counterMotion) {
+	at := func(class string, value int) {
+		text(b, n.x, n.y, class, n.anchor, fit(n.format(value), n.size, n.limit))
+	}
+	if len(motion.frames) == 0 {
+		at(n.class, n.value)
+		return
+	}
+	for i, cls := range motion.frames {
+		at(classes(n.class, "cuf", cls), counterValue(n.value, i, counterFrames))
+	}
+	at(classes(n.class, "cuz", motion.final), n.value)
 }
 
 // counterValue is the value shown at frame i of n, eased so the count
@@ -39,7 +98,7 @@ func counterValue(v, i, n int) int {
 func drawAnimatedCounters(b *strings.Builder, c *Card, s *spec) {
 	inner := s.width - 2*pad
 	tl := newTimeline(s.motion)
-	frames, final := counterBeats(tl)
+	count := counterBeats(tl)
 	var spark sparkMotion
 	if s.has(fieldSparkline) {
 		spark = sparkBeats(tl)
@@ -61,10 +120,11 @@ func drawAnimatedCounters(b *strings.Builder, c *Card, s *spec) {
 				y += rowH
 			}
 			x := pad + float64(i%perRow)*cell
-			for f, cls := range frames {
-				text(&body, x, y+24, classes("big cuf", cls), "start", fit(compact(counterValue(m.value, f, counterFrames)), 24, cell-10))
-			}
-			text(&body, x, y+24, classes("big cuz", final), "start", fit(compact(m.value), 24, cell-10))
+			countUp(&body, countedNumber{
+				value: m.value, x: x, y: y + 24,
+				class: "big", anchor: "start",
+				size: 24, limit: cell - 10, format: compact,
+			}, count)
 			text(&body, x, y+40, "l", "start", fit(m.label, 11, cell-10))
 		}
 		y += 40
@@ -79,13 +139,7 @@ func drawAnimatedCounters(b *strings.Builder, c *Card, s *spec) {
 	}
 	height := math.Ceil(y + 16)
 
-	// The intermediate frames rest hidden. Under off there are none, and the
-	// rule would be a style for nothing.
-	base := ""
-	if tl.moving() {
-		base = ".cuf{opacity:0}\n"
-	}
-	openDoc(b, &chronicleFamily, s, height, describe(c, s), base+tl.css())
+	openDoc(b, &chronicleFamily, s, height, describe(c, s), counterCSS(count)+tl.css())
 	cardBG(b, s.width, height)
 	b.WriteString(body.String())
 }

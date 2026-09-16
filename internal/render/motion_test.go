@@ -119,9 +119,78 @@ func TestACardThatDoesNotMoveCarriesNoMotion(t *testing.T) {
 	}
 }
 
+// TestABarGrowsFromNothingAndSettlesUntransformed covers the effect nothing
+// else here uses: a grow places the box and the edge it scales from on the
+// class, as static declarations, and leaves the element untransformed at the
+// end of the cycle, which is the element's own style.
+func TestABarGrowsFromNothingAndSettlesUntransformed(t *testing.T) {
+	tl := newTimeline(MotionOnce)
+	tl.add(effectFade, 0, 1, "linear")
+	tl.add(effectGrowX, 1, 1, "ease-out")
+	css := tl.css()
+	for _, want := range []string{
+		".m1{animation:m1 2s ease-out 1;transform-box:fill-box;transform-origin:left}",
+		"@keyframes m1{0%,50%{transform:scaleX(0)}100%{transform:scaleX(1)}}",
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("css lacks %q:\n%s", want, css)
+		}
+	}
+	// Only the effect that needs them carries them. A fade that anchored a
+	// transform would be saying something about a property it never touches.
+	if strings.Contains(css, ".m0{animation:m0 2s linear 1;transform-box") {
+		t.Errorf("a fade must not carry a transform box:\n%s", css)
+	}
+}
+
+// TestAGrowAtTheStartOfTheCycleWritesACleanFirstStop is the grow's half of the
+// from == 0 case the reveal has its own test for: a beat that starts exactly
+// when the cycle does writes one stop and not a range from zero to zero.
+func TestAGrowAtTheStartOfTheCycleWritesACleanFirstStop(t *testing.T) {
+	tl := newTimeline(MotionOnce)
+	tl.add(effectGrowX, 0, 1, "ease-out")
+	css := tl.css()
+	if !strings.Contains(css, "@keyframes m0{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}") {
+		t.Errorf("css lacks the two-stop grow at 0:\n%s", css)
+	}
+	if strings.Contains(css, "0%,0%") {
+		t.Errorf("a grow starting at 0 must not write a range of no length:\n%s", css)
+	}
+}
+
+// TestAGrowingBarRestsAtFullWidthBetweenTheLapsOfALoop is what a loop asks of
+// this effect that a single play does not: the bar has to hold the width it
+// grew to for the rest of the cycle, or a looping card would show it snap back
+// and sit at nothing until the next lap.
+func TestAGrowingBarRestsAtFullWidthBetweenTheLapsOfALoop(t *testing.T) {
+	tl := newTimeline(MotionLoop)
+	tl.add(effectGrowX, 0, 1.6, "ease-out")
+	css := tl.css()
+	for _, want := range []string{
+		".m0{animation:m0 8.6s ease-out infinite;transform-box:fill-box;transform-origin:left}",
+		"@keyframes m0{0%{transform:scaleX(0)}18.6%,100%{transform:scaleX(1)}}",
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("css lacks %q:\n%s", want, css)
+		}
+	}
+}
+
 func TestClassesSkipsTheEmptyParts(t *testing.T) {
 	if got := classes("big", "", "cuz", ""); got != "big cuz" {
 		t.Errorf("classes = %q, want %q", got, "big cuz")
+	}
+}
+
+// TestAClassAttributeIsWrittenOnlyWhenThereIsAClass keeps a card that does not
+// move free of the attributes a card that does needs: an element the motion
+// named nothing on is written exactly as it was before there was motion.
+func TestAClassAttributeIsWrittenOnlyWhenThereIsAClass(t *testing.T) {
+	if got := classAttr("n", "m3"); got != ` class="n m3"` {
+		t.Errorf("classAttr = %q", got)
+	}
+	if got := classAttr("", ""); got != "" {
+		t.Errorf("classAttr with nothing to say = %q, want no attribute", got)
 	}
 }
 
