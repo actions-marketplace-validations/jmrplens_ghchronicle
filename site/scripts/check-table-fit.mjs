@@ -27,6 +27,25 @@
  * drift, a wrong working directory or a plugin that stopped wrapping tables
  * would read as success.
  *
+ * The same walk checks the compact form an index table gets (see "The
+ * compact form" in styles/tables.css), and it checks it from the SOURCE, not
+ * from the markup. The tables a page declares in its frontmatter
+ * (`indexTables`) are read here straight from src/content/docs, and every one
+ * of them has to render compact at both widths, on its page, in both
+ * languages. Reading the markup instead would have checked only the tables the
+ * plugin had marked, so a plugin that stopped marking them (Astro moving the
+ * frontmatter away from where src/lib/rehype-tables.mjs reads it, say) would
+ * have printed "0 compact indexes" and passed with every index back in stacked
+ * boxes. For the same reason a corpus that declares no index at all is a
+ * failure, and the layouts pages, whose rows each have a section, must carry
+ * a link on every row: a link check with no links passes silently too. Every
+ * `#` link in a table must also land on something on its page.
+ *
+ * The compact form is switched on by an empty custom property,
+ * `--table-stacked: ;`, and a minifier that decided an empty value was a
+ * mistake is the other way the indexes go back to boxes while every table
+ * still fits. This catches that too.
+ *
  * The fixtures at the bottom run on every invocation.
  *
  * Usage:
@@ -34,8 +53,11 @@
  *   node scripts/check-table-fit.mjs --self-test   # fixtures only, no corpus
  */
 import { readFileSync, readdirSync } from "node:fs";
-import { join, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+import { parse } from "yaml";
 
 import { freePort, startPreview } from "./preview.mjs";
 
@@ -48,6 +70,23 @@ const WIDTHS = [360, 400];
  * measure one pixel over. Two pixels is already a visible scrollbar.
  */
 const TOLERANCE = 1;
+
+/** Where the pages, and the indexTables they declare, are written. */
+const DOCS = resolve(
+	dirname(fileURLToPath(import.meta.url)),
+	"..",
+	"src",
+	"content",
+	"docs",
+);
+
+/**
+ * The pages whose index table must link every row. Each layout has a section
+ * of its own on these pages, so a row without a link is a row the plugin
+ * failed to link, and requiring the count is what keeps the dead-link check
+ * from passing on a table that carries no link at all.
+ */
+const LINK_EVERY_ROW = new Set(["card/layouts/", "es/card/layouts/"]);
 
 /** What the plugin wraps every prose table in, and what a page is scanned for. */
 const WRAPPER = "table-scroll";
@@ -72,6 +111,92 @@ export function routeOf(file) {
 		.split(sep)
 		.join("/")
 		.replace(/index\.html$/, "");
+}
+
+/**
+ * The route a source page is served at, from its path inside src/content/docs.
+ *
+ * @param {string} file a docs-relative path ending in .md or .mdx
+ * @returns {string} the route, "" for the home page, otherwise trailing-slashed
+ */
+export function routeOfSource(file) {
+	const path = file
+		.split(sep)
+		.join("/")
+		.replace(/\.mdx?$/, "")
+		.replace(/(^|\/)index$/, "");
+	return path ? `${path}/` : "";
+}
+
+/**
+ * The first-column headings a page's frontmatter declares as index tables.
+ *
+ * @param {string} source the whole page, frontmatter included
+ * @returns {string[]}
+ */
+export function declaredIndexTables(source) {
+	const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(source);
+	if (!match) return [];
+	const declared = parse(match[1])?.indexTables;
+	return Array.isArray(declared) ? declared.map(String) : [];
+}
+
+/** Every page under src/content/docs that declares an index, by route. */
+function declaredCorpus(dir = DOCS) {
+	const declared = new Map();
+	const visit = (folder) => {
+		for (const entry of readdirSync(folder, { withFileTypes: true })) {
+			const path = join(folder, entry.name);
+			if (entry.isDirectory()) visit(path);
+			else if (/\.mdx?$/.test(entry.name)) {
+				const headings = declaredIndexTables(readFileSync(path, "utf8"));
+				if (headings.length > 0) {
+					declared.set(routeOfSource(relative(dir, path)), headings);
+				}
+			}
+		}
+	};
+	visit(dir);
+	return declared;
+}
+
+/**
+ * What is wrong with one page's index tables at one width, read against what
+ * its source declared rather than against what the markup says.
+ *
+ * @param {{
+ *   declared: string[],
+ *   tables: { firstHeading: string, compact: boolean, rows: number, linkedRows: number }[],
+ *   linkEveryRow: boolean,
+ * }} page
+ * @returns {string[]} one sentence per problem, none when the page is right
+ */
+export function indexProblems({ declared, tables, linkEveryRow }) {
+	const problems = [];
+	for (const heading of declared) {
+		const matching = tables.filter((table) => table.firstHeading === heading);
+		if (matching.length === 0) {
+			problems.push(
+				`declares "${heading}" an index and renders no table with that first column`,
+			);
+		}
+		for (const table of matching) {
+			if (!table.compact) {
+				problems.push(
+					`"${heading}" is declared an index and did not render compact: ` +
+						"either src/lib/rehype-tables.mjs did not mark it or the " +
+						"compact form in src/styles/tables.css did not switch on",
+				);
+			}
+			if (linkEveryRow && table.linkedRows !== table.rows) {
+				problems.push(
+					`"${heading}" links ${table.linkedRows} of its ${table.rows} rows ` +
+						"to their sections, and every row here has one",
+				);
+			}
+		}
+	}
+	return problems;
 }
 
 /**
@@ -106,6 +231,23 @@ function measureTables() {
 					: "",
 				columns: heads.length,
 				stacked: getComputedStyle(table).display !== "table",
+				firstHeading: heads.length ? heads[0].textContent.trim() : "",
+				rows: table.querySelectorAll("tbody tr").length,
+				linkedRows: [...table.querySelectorAll("tbody tr")].filter((row) =>
+					row.querySelector('td:first-child a[href^="#"]'),
+				).length,
+				// Compact is the stacked table whose second cell runs inline.
+				compact:
+					getComputedStyle(table).display !== "table" &&
+					[...table.querySelectorAll("tbody td:nth-child(2)")].every(
+						(cell) => getComputedStyle(cell).display === "inline",
+					),
+				deadLinks: [...table.querySelectorAll('a[href^="#"]')]
+					.filter(
+						(link) =>
+							!document.getElementById(decodeURIComponent(link.hash.slice(1))),
+					)
+					.map((link) => link.getAttribute("href")),
 			};
 		},
 	);
@@ -131,11 +273,31 @@ async function walk(dist) {
 		);
 	}
 
+	const declared = declaredCorpus();
+	if (declared.size === 0) {
+		throw new Error(
+			`no page under ${DOCS} declares indexTables, so the compact form ` +
+				"would go unchecked. Either the frontmatter key was renamed or " +
+				"this file reads the wrong directory.",
+		);
+	}
+	const undeclaredRoutes = [...declared.keys()].filter(
+		(route) => !routes.includes(route),
+	);
+	if (undeclaredRoutes.length > 0) {
+		throw new Error(
+			`${undeclaredRoutes.map((route) => `/${route}`).join(", ")} declare ` +
+				"indexTables and render no table at all.",
+		);
+	}
+
 	const { chromium } = await import("playwright");
 	const preview = startPreview(await freePort());
 	const failures = [];
 	let tables = 0;
 	let stacked = 0;
+	let compact = 0;
+	let indexes = 0;
 	let browser;
 	try {
 		const base = await preview.announced;
@@ -153,11 +315,37 @@ async function walk(dist) {
 						`the preview answered ${response ? response.status() : "nothing"} for ${url.pathname}`,
 					);
 				}
-				for (const measured of await page.evaluate(measureTables)) {
+				const measuredTables = await page.evaluate(measureTables);
+				if (declared.has(route)) {
+					indexes += declared.get(route).length;
+					for (const problem of indexProblems({
+						declared: declared.get(route),
+						tables: measuredTables,
+						linkEveryRow: LINK_EVERY_ROW.has(route),
+					})) {
+						failures.push({ width, route, index: "index", problem });
+					}
+				}
+				for (const measured of measuredTables) {
 					tables += 1;
 					if (measured.stacked) stacked += 1;
+					if (measured.compact) compact += 1;
 					const { overflow, fits } = verdict(measured);
-					if (!fits) failures.push({ width, route, overflow, ...measured });
+					const problems = [];
+					if (!fits) {
+						problems.push(
+							`+${overflow}px (column ${measured.container}px, table ${measured.content}px), ` +
+								`${measured.columns} columns, widest "${measured.widest}"`,
+						);
+					}
+					if (measured.deadLinks.length > 0) {
+						problems.push(
+							`links to ${measured.deadLinks.join(", ")}, which nothing on the page carries`,
+						);
+					}
+					for (const problem of problems) {
+						failures.push({ width, route, index: measured.index, problem });
+					}
 				}
 			}
 			await page.close();
@@ -171,7 +359,7 @@ async function walk(dist) {
 			`the ${routes.length} pages scanned rendered no table at all.`,
 		);
 	}
-	return { failures, tables, stacked, routes: routes.length };
+	return { failures, tables, stacked, compact, indexes, routes: routes.length };
 }
 
 /* ------------------------------------------------------------------
@@ -226,6 +414,72 @@ function selfTest() {
 		{ overflow: 346, fits: false },
 	);
 
+	is(
+		"a page's source path gives its route",
+		routeOfSource(join("es", "card", "layouts.mdx")),
+		"es/card/layouts/",
+	);
+	is("a section index is its folder", routeOfSource("how/index.mdx"), "how/");
+	is("the home page is the empty route", routeOfSource("index.mdx"), "");
+	is(
+		"a block list in the frontmatter is read",
+		declaredIndexTables("---\ntitle: x\nindexTables:\n  - Layout\n---\n\nbody"),
+		["Layout"],
+	);
+	is(
+		"a page without the key declares nothing",
+		declaredIndexTables("---\ntitle: x\n---\n"),
+		[],
+	);
+	const layouts = {
+		firstHeading: "Layout",
+		compact: true,
+		rows: 13,
+		linkedRows: 13,
+	};
+	is(
+		"a compact index with every row linked is right",
+		indexProblems({
+			declared: ["Layout"],
+			tables: [layouts],
+			linkEveryRow: true,
+		}),
+		[],
+	);
+	is(
+		"an index the plugin stopped marking is caught from its source",
+		indexProblems({
+			declared: ["Layout"],
+			tables: [{ ...layouts, compact: false }],
+			linkEveryRow: false,
+		}).length,
+		1,
+	);
+	is(
+		"a declared index with no table of that name is caught",
+		indexProblems({ declared: ["Layout"], tables: [], linkEveryRow: false })
+			.length,
+		1,
+	);
+	is(
+		"a layouts table that lost its links is caught",
+		indexProblems({
+			declared: ["Layout"],
+			tables: [{ ...layouts, linkedRows: 0 }],
+			linkEveryRow: true,
+		}).length,
+		1,
+	);
+	is(
+		"an index whose rows have no sections is not asked for links",
+		indexProblems({
+			declared: ["Family"],
+			tables: [{ ...layouts, firstHeading: "Family", linkedRows: 0 }],
+			linkEveryRow: false,
+		}),
+		[],
+	);
+
 	if (failed.length > 0) {
 		console.error("[table-fit] fixtures failed:");
 		for (const line of failed) console.error(`  ${line}`);
@@ -250,30 +504,34 @@ const DIST = resolve(
 );
 
 try {
-	const { failures, tables, stacked, routes } = await walk(DIST);
+	const { failures, tables, stacked, compact, indexes, routes } =
+		await walk(DIST);
 	if (failures.length > 0) {
 		console.error(
-			`[table-fit] ${failures.length} of ${tables} measurements overflow their column:`,
+			`[table-fit] ${failures.length} problems over ${tables} measurements:`,
 		);
 		for (const failure of failures) {
 			console.error(
-				`  ${failure.width}px /${failure.route} table ${failure.index}: ` +
-					`+${failure.overflow}px (column ${failure.container}px, table ${failure.content}px), ` +
-					`${failure.columns} columns, widest "${failure.widest}"`,
+				`  ${failure.width}px /${failure.route} table ${failure.index}: ${failure.problem}`,
 			);
 		}
 		console.error(
 			"[table-fit] a table that does not fit has to scroll sideways, which " +
 				"on a phone is how the documentation stopped being readable. Either " +
 				"the breakpoint in src/styles/tables.css no longer covers this " +
-				"shape, or something in the cell cannot wrap.",
+				"shape, or something in the cell cannot wrap. An index in stacked " +
+				"boxes, or a row linking nowhere, is the compact form of the same " +
+				"file and of src/lib/rehype-tables.mjs.",
 		);
 		process.exit(1);
 	}
 	console.log(
 		`[table-fit] ${tables} measurements over ${routes} pages at ` +
 			`${WIDTHS.join(" and ")} px: every table fits its column ` +
-			`(${stacked} stacked, ${tables - stacked} still tables).`,
+			`(${stacked - compact} stacked, ${compact} compact indexes, ` +
+			`${tables - stacked} still tables); all ${indexes} measurements of ` +
+			"the index tables the sources declare rendered compact, every " +
+			"layouts row is linked, and every row link lands.",
 	);
 } catch (error) {
 	console.error(`[table-fit] ${error.message}`);
