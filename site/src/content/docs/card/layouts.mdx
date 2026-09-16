@@ -13,8 +13,9 @@ import Card from "../../../components/Card.astro";
 ghchronicle -card-layouts
 ```
 
-Prints them with the fields each shows by default. The captures below are the
-dark theme; every layout also renders light, and `auto` puts both in one file.
+Prints them with the fields each shows by default. Each card below is shown in
+the palette this page is in, light or dark; every layout draws both, and `auto`
+puts both in one file.
 
 | Layout              | Family    | Animated | Loops | Default fields                                                                       |
 | ------------------- | --------- | -------- | ----- | ------------------------------------------------------------------------------------ |
@@ -37,6 +38,17 @@ dark theme; every layout also renders light, and `auto` puts both in one file.
 The **chronicle** family is this tool's own look. The **github** family uses
 GitHub's Primer palette and monospace numbers so the card sits in a profile
 README as if GitHub had drawn it.
+
+<Aside type="tip" title="The command under each card">
+  Under each picture, **Command for** opens the command that draws that card
+  from your own account, and the same card as a step of the
+  [Action](/ghchronicle/install/actions/#a-card-in-your-profile-readme).
+  `config.yaml` is your configuration, and `-card-theme both` writes two files,
+  `card.svg` and `card_dark.svg`, which is how a page or a README shows the card
+  in its own palette. On the two cards that loop, pressing the loop toggle adds
+  `-card-motion loop`. The numbers a card draws are chosen with `-card-fields`,
+  and every flag is on [the card](/ghchronicle/card/#the-flags).
+</Aside>
 
 ## summary
 

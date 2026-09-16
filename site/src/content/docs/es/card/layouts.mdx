@@ -13,9 +13,9 @@ import Card from "../../../../components/Card.astro";
 ghchronicle -card-layouts
 ```
 
-Los imprime con los campos que muestra cada uno por omisión. Las capturas de
-abajo son del tema oscuro; todos los diseños se dibujan también en claro, y
-`auto` mete ambos en un fichero.
+Los imprime con los campos que muestra cada uno por omisión. Cada tarjeta de
+abajo se muestra en la paleta en la que está esta página, clara u oscura; todos
+los diseños dibujan las dos, y `auto` mete ambas en un fichero.
 
 | Diseño              | Familia   | Animado | Bucle | Campos por omisión                                                                   |
 | ------------------- | --------- | ------- | ----- | ------------------------------------------------------------------------------------ |
@@ -38,6 +38,18 @@ abajo son del tema oscuro; todos los diseños se dibujan también en claro, y
 La familia **chronicle** es el aspecto propio de esta herramienta. La familia
 **github** usa la paleta Primer de GitHub y números monoespaciados para que la
 tarjeta encaje en un README de perfil como si la hubiera dibujado GitHub.
+
+<Aside type="tip" title="La orden bajo cada tarjeta">
+  Bajo cada imagen, **Orden para** abre la orden que dibuja esa tarjeta a partir
+  de tu propia cuenta, y la misma tarjeta como paso de la
+  [Action](/ghchronicle/es/install/actions/#una-tarjeta-en-el-readme-de-tu-perfil).
+  `config.yaml` es tu configuración, y `-card-theme both` escribe dos ficheros,
+  `card.svg` y `card_dark.svg`, que es como una página o un README muestran la
+  tarjeta en su propia paleta. En las dos tarjetas que hacen bucle, pulsar el
+  botón de bucle añade `-card-motion loop`. Los números que dibuja una tarjeta
+  se eligen con `-card-fields`, y todas las opciones están en [la
+  tarjeta](/ghchronicle/es/card/#las-opciones).
+</Aside>
 
 ## summary
 

@@ -8,7 +8,7 @@ import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 import Card from "../../../components/Card.astro";
 
 ```sh
-ghchronicle -config config.yaml -card profile.svg -card-only
+ghchronicle -config config.yaml -card card.svg -card-only
 ```
 
 <Aside type="note" title="This is a side feature">
@@ -23,7 +23,7 @@ ghchronicle -config config.yaml -card profile.svg -card-only
 | --------------------------------------- | ------------------------------------------------------------ |
 | `-card <path>`                          | Runs one sweep and writes the SVG there                      |
 | `-card-only`                            | Writes the SVG and nothing else, so no database is needed    |
-| `-card-layout <name>`                   | One of the ten [layouts](/ghchronicle/card/layouts/)         |
+| `-card-layout <name>`                   | One of the thirteen [layouts](/ghchronicle/card/layouts/)    |
 | `-card-theme <dark\|light\|auto\|both>` | Both writes the light card and a `_dark` twin from one sweep |
 | `-card-motion <once\|loop\|off>`        | How an animated layout moves; the others ignore it           |
 | `-card-fields <list>`                   | Comma-separated, in drawing order                            |
@@ -74,7 +74,7 @@ the valid ones, rather than a silent skip: a typo would otherwise remove a
 number and nobody would notice until the card was already committed.
 
 ```sh
-ghchronicle -config config.yaml -card profile.svg -card-only \
+ghchronicle -config config.yaml -card card.svg -card-only \
   -card-layout github-stats -card-theme dark \
   -card-fields repos,stars,forks,followers,commits,pull_requests,languages
 ```

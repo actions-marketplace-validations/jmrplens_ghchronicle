@@ -9,7 +9,7 @@ A self-contained SVG for a profile README, drawn from the same points the databa
 Source: <https://jmrp.io/docs/ghchronicle/card/>
 
 ```sh
-ghchronicle -config config.yaml -card profile.svg -card-only
+ghchronicle -config config.yaml -card card.svg -card-only
 ```
 
 > **This is a side feature**
@@ -24,7 +24,7 @@ ghchronicle -config config.yaml -card profile.svg -card-only
 | --------------------------------------- | ------------------------------------------------------------ |
 | `-card <path>`                          | Runs one sweep and writes the SVG there                      |
 | `-card-only`                            | Writes the SVG and nothing else, so no database is needed    |
-| `-card-layout <name>`                   | One of the ten [layouts](https://jmrp.io/docs/ghchronicle/card/layouts/)         |
+| `-card-layout <name>`                   | One of the thirteen [layouts](https://jmrp.io/docs/ghchronicle/card/layouts/)    |
 | `-card-theme <dark\|light\|auto\|both>` | Both writes the light card and a `_dark` twin from one sweep |
 | `-card-motion <once\|loop\|off>`        | How an animated layout moves; the others ignore it           |
 | `-card-fields <list>`                   | Comma-separated, in drawing order                            |
@@ -75,7 +75,7 @@ the valid ones, rather than a silent skip: a typo would otherwise remove a
 number and nobody would notice until the card was already committed.
 
 ```sh
-ghchronicle -config config.yaml -card profile.svg -card-only \
+ghchronicle -config config.yaml -card card.svg -card-only \
   -card-layout github-stats -card-theme dark \
   -card-fields repos,stars,forks,followers,commits,pull_requests,languages
 ```
@@ -165,6 +165,43 @@ presses the toggle (WCAG 2.2.2, Pause, Stop, Hide).
 
 ![The terminal layout played once: a terminal window whose lines of output each have a number typing itself in, with a lit block cursor at the prompt below them that blinks once the last number lands, and the page can also play it in a loop, where the typing still happens once and only the cursor goes on, blinking from the start](../site/src/assets/card-terminal.svg)
 
+- **Binary**
+
+  ```sh
+  ghchronicle -card-layout terminal -card-theme both -card-only -card card.svg -config config.yaml
+  ```
+
+  The looping picture:
+
+  ```sh
+  ghchronicle -card-layout terminal -card-theme both -card-only -card card.svg -config config.yaml -card-motion loop
+  ```
+
+- **GitHub Action**
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: terminal
+      card-theme: both
+  ```
+
+  The looping picture:
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: terminal
+      card-theme: both
+      card-motion: loop
+  ```
+
 ### In a README
 
 ```html
@@ -192,8 +229,9 @@ Source: <https://jmrp.io/docs/ghchronicle/card/layouts/>
 ghchronicle -card-layouts
 ```
 
-Prints them with the fields each shows by default. The captures below are the
-dark theme; every layout also renders light, and `auto` puts both in one file.
+Prints them with the fields each shows by default. Each card below is shown in
+the palette this page is in, light or dark; every layout draws both, and `auto`
+puts both in one file.
 
 | Layout              | Family    | Animated | Loops | Default fields                                                                       |
 | ------------------- | --------- | -------- | ----- | ------------------------------------------------------------------------------------ |
@@ -217,12 +255,41 @@ The **chronicle** family is this tool's own look. The **github** family uses
 GitHub's Primer palette and monospace numbers so the card sits in a profile
 README as if GitHub had drawn it.
 
+> **The command under each card**
+>
+> Under each picture, **Command for** opens the command that draws that card
+> from your own account, and the same card as a step of the
+> [Action](https://jmrp.io/docs/ghchronicle/install/actions/#a-card-in-your-profile-readme).
+> `config.yaml` is your configuration, and `-card-theme both` writes two files,
+> `card.svg` and `card_dark.svg`, which is how a page or a README shows the card
+> in its own palette. On the two cards that loop, pressing the loop toggle adds
+> `-card-motion loop`. The numbers a card draws are chosen with `-card-fields`,
+> and every flag is on [the card](https://jmrp.io/docs/ghchronicle/card/#the-flags).
+
 ### summary
 
 The original card: title, two rows of numbers, a sparkline and the most starred
 repositories.
 
 ![The summary layout: a title, two rows of large numbers, a contribution sparkline and a list of the most starred repositories](../site/src/assets/card-summary.svg)
+
+- **Binary**
+
+  ```sh
+  ghchronicle -card-layout summary -card-theme both -card-only -card card.svg -config config.yaml
+  ```
+
+- **GitHub Action**
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: summary
+      card-theme: both
+  ```
 
 ### github-stats
 
@@ -233,11 +300,47 @@ in from its left edge once they have landed.
 
 ![The github-stats layout played once: a header band over rows of four monospace numbers counting up, and a horizontal language share bar growing in from the left beside its legend](../site/src/assets/card-github-stats.svg)
 
+- **Binary**
+
+  ```sh
+  ghchronicle -card-layout github-stats -card-theme both -card-only -card card.svg -config config.yaml
+  ```
+
+- **GitHub Action**
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: github-stats
+      card-theme: both
+  ```
+
 ### github-compact
 
 One row of monospace numbers under a thin header band.
 
 ![The github-compact layout: a thin header band above a single row of monospace numbers](../site/src/assets/card-github-compact.svg)
+
+- **Binary**
+
+  ```sh
+  ghchronicle -card-layout github-compact -card-theme both -card-only -card card.svg -config config.yaml
+  ```
+
+- **GitHub Action**
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: github-compact
+      card-theme: both
+  ```
 
 ### badge-row
 
@@ -246,6 +349,24 @@ follows the content rather than being set.
 
 ![The badge-row layout: a horizontal row of small pill badges, each with a label and a number](../site/src/assets/card-badge-row.svg)
 
+- **Binary**
+
+  ```sh
+  ghchronicle -card-layout badge-row -card-theme both -card-only -card card.svg -config config.yaml
+  ```
+
+- **GitHub Action**
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: badge-row
+      card-theme: both
+  ```
+
 ### wide-banner
 
 A full-width 60 pixel banner: login on the left, numbers spread across, the
@@ -253,12 +374,48 @@ sparkline drawing itself behind them.
 
 ![The wide-banner layout played once: a wide, short banner with the login on the left, numbers spread across and a sparkline drawing itself behind them](../site/src/assets/card-wide-banner.svg)
 
+- **Binary**
+
+  ```sh
+  ghchronicle -card-layout wide-banner -card-theme both -card-only -card card.svg -config config.yaml
+  ```
+
+- **GitHub Action**
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: wide-banner
+      card-theme: both
+  ```
+
 ### sparkline-hero
 
 The contribution sparkline is the whole card, with up to three numbers
 overlaid. The line draws itself on load.
 
 ![The sparkline-hero layout played once: a large contribution sparkline drawing itself across the card with three numbers overlaid](../site/src/assets/card-sparkline-hero.svg)
+
+- **Binary**
+
+  ```sh
+  ghchronicle -card-layout sparkline-hero -card-theme both -card-only -card card.svg -config config.yaml
+  ```
+
+- **GitHub Action**
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: sparkline-hero
+      card-theme: both
+  ```
 
 ### language-ring
 
@@ -268,12 +425,48 @@ the legend appears when the donut is whole.
 
 ![The language-ring layout played once: a donut chart whose language slices draw themselves one after another, with a legend appearing beside it and a row of headline numbers](../site/src/assets/card-language-ring.svg)
 
+- **Binary**
+
+  ```sh
+  ghchronicle -card-layout language-ring -card-theme both -card-only -card card.svg -config config.yaml
+  ```
+
+- **GitHub Action**
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: language-ring
+      card-theme: both
+  ```
+
 ### repo-list
 
 The most starred repositories as the main content: language dot, stars and a
 bar per row, totals underneath.
 
 ![The repo-list layout: one row per repository with a language dot, the star count and a proportional bar, with totals underneath](../site/src/assets/card-repo-list.svg)
+
+- **Binary**
+
+  ```sh
+  ghchronicle -card-layout repo-list -card-theme both -card-only -card card.svg -config config.yaml
+  ```
+
+- **GitHub Action**
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: repo-list
+      card-theme: both
+  ```
 
 ### activity-heatmap
 
@@ -283,12 +476,48 @@ every twenty milliseconds, so the calendar fills in as a wave.
 
 ![The activity-heatmap layout played once: twelve weeks of contribution squares in GitHub's green scale fading in from the left, with three numbers beside them](../site/src/assets/card-activity-heatmap.svg)
 
+- **Binary**
+
+  ```sh
+  ghchronicle -card-layout activity-heatmap -card-theme both -card-only -card card.svg -config config.yaml
+  ```
+
+- **GitHub Action**
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: activity-heatmap
+      card-theme: both
+  ```
+
 ### animated-counters
 
 Numbers that count up on load over a sparkline that draws itself, settling to
 the static card.
 
 ![The animated-counters layout played once: a grid of large numbers counting up over a contribution sparkline that draws itself](../site/src/assets/card-animated-counters.svg)
+
+- **Binary**
+
+  ```sh
+  ghchronicle -card-layout animated-counters -card-theme both -card-only -card card.svg -config config.yaml
+  ```
+
+- **GitHub Action**
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: animated-counters
+      card-theme: both
+  ```
 
 ### terminal
 
@@ -306,6 +535,43 @@ happens once either way.
 
 ![The terminal layout played once: a terminal window with the project's mark in its title bar, whose lines of output each have a number typing itself in under a lit block cursor that begins blinking when the last number lands, and the page can also play it in a loop, where the typing still happens once and the cursor blinks from the start and never stops](../site/src/assets/card-terminal.svg)
 
+- **Binary**
+
+  ```sh
+  ghchronicle -card-layout terminal -card-theme both -card-only -card card.svg -config config.yaml
+  ```
+
+  The looping picture:
+
+  ```sh
+  ghchronicle -card-layout terminal -card-theme both -card-only -card card.svg -config config.yaml -card-motion loop
+  ```
+
+- **GitHub Action**
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: terminal
+      card-theme: both
+  ```
+
+  The looping picture:
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: terminal
+      card-theme: both
+      card-motion: loop
+  ```
+
 ### ticker
 
 A band of pills, one per number and one per repository, scrolling from right to
@@ -317,6 +583,43 @@ round than any other layout takes to settle.
 
 ![The ticker layout played once: a wide band of rounded pills, one per number and one per repository, scrolling from right to left under the account name, and the page can also play it in a loop](../site/src/assets/card-ticker.svg)
 
+- **Binary**
+
+  ```sh
+  ghchronicle -card-layout ticker -card-theme both -card-only -card card.svg -config config.yaml
+  ```
+
+  The looping picture:
+
+  ```sh
+  ghchronicle -card-layout ticker -card-theme both -card-only -card card.svg -config config.yaml -card-motion loop
+  ```
+
+- **GitHub Action**
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: ticker
+      card-theme: both
+  ```
+
+  The looping picture:
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: ticker
+      card-theme: both
+      card-motion: loop
+  ```
+
 ### language-bars
 
 One full-width bar per language, each growing from its own left edge after the
@@ -325,6 +628,24 @@ stopped. The layout that shows the share of a language as its own line, where
 `language-ring` shows all of them in one donut and `github-stats` in one bar.
 
 ![The language-bars layout played once: one full-width bar per language growing from its left edge, one after another, with the language name and its percentage arriving behind each bar](../site/src/assets/card-language-bars.svg)
+
+- **Binary**
+
+  ```sh
+  ghchronicle -card-layout language-bars -card-theme both -card-only -card card.svg -config config.yaml
+  ```
+
+- **GitHub Action**
+
+  ```yaml
+  - uses: jmrplens/ghchronicle@v1
+    with:
+      token: ${{ secrets.GHCHRONICLE_TOKEN }}
+      mode: card
+      card: generated/card.svg
+      card-layout: language-bars
+      card-theme: both
+  ```
 
 > **The settled frame is the whole card**
 >
