@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="106" viewBox="0 0 800 106" role="img" aria-labelledby="ghcTitle ghcDesc">
+<title id="ghcTitle">octo</title>
+<desc id="ghcDesc">GitHub summary for octo: 1234567 stars, 0 forks, 999950 followers, 3 public repositories, 1049950000 contributions in the last year, -12 repository views over the traffic window, 7 unique visitors over the traffic window, 1000 clones over the traffic window, 100 commits in the last year, 10 pull requests in the last year, 1 reviews in the last year, 0 issues in the last year. Most starred repositories: a-repository-name-far-wider-than-any-column-it-could-be-given with 50 stars in Go, no-language with 50 stars, unknown with 3 stars in Brainfuck, unstarred with 0 stars in Rust.</desc>
+<style>
+.bg{fill:#0d1117;stroke:#30363d}
+.panel{fill:#161b22}
+.t,.v,.big{fill:#e6edf3}
+.d,.l,.h,.s{fill:#8b949e}
+.n,.c{fill:#c9d1d9}
+.star,.pill-v{fill:#e3b341}
+.on-accent{fill:#0d1117}
+.line{stroke:#58a6ff}
+.area{fill:#58a6ff}
+.axis,.edge{stroke:#30363d}
+.track{fill:#30363d}
+.ok{fill:#3fb950}
+.fg{fill:#e6edf3}
+.h0{fill:#151b23}.h1{fill:#033a16}.h2{fill:#196c2e}.h3{fill:#2ea043}.h4{fill:#56d364}
+text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif}
+.mono{font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace}
+.t{font-size:18px;font-weight:600}
+.d{font-size:11px}
+.v{font-size:16px;font-weight:600}
+.big{font-size:24px;font-weight:700}
+.l{font-size:11px}
+.h{font-size:10px;font-weight:600;letter-spacing:0.08em}
+.n{font-size:12px}
+.s{font-size:11px}
+.c{font-size:12px}
+.line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.area{fill-opacity:0.14;stroke:none}
+.axis{stroke-width:1}
+.edge{fill:none;stroke-width:1}
+.tkv{font-size:14px}
+.tkl{font-size:12px}
+.m0{animation:m0 13.33s linear 1}
+@keyframes m0{0%{transform:translateX(0px)}100%{transform:translateX(-1866px)}}
+@media (prefers-reduced-motion:reduce){.m0{animation:none}}
+</style>
+<rect class="bg" x="0.5" y="0.5" width="799" height="105" rx="6"/>
+<text class="t" x="25" y="30" text-anchor="start">octo</text>
+<text class="s" x="775" y="30" text-anchor="end">@octo</text>
+<svg x="25" y="46" width="750" height="46">
+<g class="m0">
+<rect class="track" x="0" y="6" width="94.6" height="34" rx="17"/>
+<text class="c mono tkv" x="14" y="28" text-anchor="start">1.2M</text>
+<text class="s tkl" x="53.6" y="28" text-anchor="start">stars</text>
+<rect class="track" x="104.6" y="6" width="69.4" height="34" rx="17"/>
+<text class="c mono tkv" x="118.6" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="133" y="28" text-anchor="start">forks</text>
+<rect class="track" x="184" y="6" width="98.2" height="34" rx="17"/>
+<text class="c mono tkv" x="198" y="28" text-anchor="start">1M</text>
+<text class="s tkl" x="220.8" y="28" text-anchor="start">followers</text>
+<rect class="track" x="292.2" y="6" width="72.4" height="34" rx="17"/>
+<text class="c mono tkv" x="306.2" y="28" text-anchor="start">3</text>
+<text class="s tkl" x="320.6" y="28" text-anchor="start">repos</text>
+<rect class="track" x="374.6" y="6" width="94.6" height="34" rx="17"/>
+<text class="c mono tkv" x="388.6" y="28" text-anchor="start">1B</text>
+<text class="s tkl" x="411.4" y="28" text-anchor="start">contribs</text>
+<rect class="track" x="479.2" y="6" width="89.2" height="34" rx="17"/>
+<text class="c mono tkv" x="493.2" y="28" text-anchor="start">-12</text>
+<text class="s tkl" x="524.4" y="28" text-anchor="start">views</text>
+<rect class="track" x="578.4" y="6" width="83.2" height="34" rx="17"/>
+<text class="c mono tkv" x="592.4" y="28" text-anchor="start">7</text>
+<text class="s tkl" x="606.8" y="28" text-anchor="start">visitors</text>
+<rect class="track" x="671.6" y="6" width="87.4" height="34" rx="17"/>
+<text class="c mono tkv" x="685.6" y="28" text-anchor="start">1k</text>
+<text class="s tkl" x="708.4" y="28" text-anchor="start">clones</text>
+<rect class="track" x="769" y="6" width="107.8" height="34" rx="17"/>
+<text class="c mono tkv" x="783" y="28" text-anchor="start">100</text>
+<text class="s tkl" x="814.2" y="28" text-anchor="start">commits</text>
+<rect class="track" x="886.8" y="6" width="73.72" height="34" rx="17"/>
+<text class="c mono tkv" x="900.8" y="28" text-anchor="start">10</text>
+<text class="s tkl" x="923.6" y="28" text-anchor="start">PRs</text>
+<rect class="track" x="970.52" y="6" width="82.6" height="34" rx="17"/>
+<text class="c mono tkv" x="984.52" y="28" text-anchor="start">1</text>
+<text class="s tkl" x="998.92" y="28" text-anchor="start">reviews</text>
+<rect class="track" x="1063.12" y="6" width="79" height="34" rx="17"/>
+<text class="c mono tkv" x="1077.12" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="1091.52" y="28" text-anchor="start">issues</text>
+<rect class="track" x="1152.12" y="6" width="235.9" height="34" rx="17"/>
+<circle cx="1171.12" cy="23" r="5" fill="#00add8"/>
+<text class="n tkv" x="1182.12" y="28" text-anchor="start">a-repository-name-fa…</text>
+<path class="star" transform="translate(1340.22 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="1357.22" y="28" text-anchor="start">50</text>
+<rect class="track" x="1398.02" y="6" width="168" height="34" rx="17"/>
+<circle cx="1417.02" cy="23" r="5" fill="#8b949e"/>
+<text class="n tkv" x="1428.02" y="28" text-anchor="start">no-language</text>
+<path class="star" transform="translate(1518.22 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="1535.22" y="28" text-anchor="start">50</text>
+<rect class="track" x="1576.02" y="6" width="132.3" height="34" rx="17"/>
+<circle cx="1595.02" cy="23" r="5" fill="#8b949e"/>
+<text class="n tkv" x="1606.02" y="28" text-anchor="start">unknown</text>
+<path class="star" transform="translate(1668.92 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="1685.92" y="28" text-anchor="start">3</text>
+<rect class="track" x="1718.32" y="6" width="137.2" height="34" rx="17"/>
+<circle cx="1737.32" cy="23" r="5" fill="#dea584"/>
+<text class="n tkv" x="1748.32" y="28" text-anchor="start">unstarred</text>
+<path class="star" transform="translate(1816.12 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="1833.12" y="28" text-anchor="start">0</text>
+<rect class="track" x="1866" y="6" width="94.6" height="34" rx="17"/>
+<text class="c mono tkv" x="1880" y="28" text-anchor="start">1.2M</text>
+<text class="s tkl" x="1919.6" y="28" text-anchor="start">stars</text>
+<rect class="track" x="1970.6" y="6" width="69.4" height="34" rx="17"/>
+<text class="c mono tkv" x="1984.6" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="1999" y="28" text-anchor="start">forks</text>
+<rect class="track" x="2050" y="6" width="98.2" height="34" rx="17"/>
+<text class="c mono tkv" x="2064" y="28" text-anchor="start">1M</text>
+<text class="s tkl" x="2086.8" y="28" text-anchor="start">followers</text>
+<rect class="track" x="2158.2" y="6" width="72.4" height="34" rx="17"/>
+<text class="c mono tkv" x="2172.2" y="28" text-anchor="start">3</text>
+<text class="s tkl" x="2186.6" y="28" text-anchor="start">repos</text>
+<rect class="track" x="2240.6" y="6" width="94.6" height="34" rx="17"/>
+<text class="c mono tkv" x="2254.6" y="28" text-anchor="start">1B</text>
+<text class="s tkl" x="2277.4" y="28" text-anchor="start">contribs</text>
+<rect class="track" x="2345.2" y="6" width="89.2" height="34" rx="17"/>
+<text class="c mono tkv" x="2359.2" y="28" text-anchor="start">-12</text>
+<text class="s tkl" x="2390.4" y="28" text-anchor="start">views</text>
+<rect class="track" x="2444.4" y="6" width="83.2" height="34" rx="17"/>
+<text class="c mono tkv" x="2458.4" y="28" text-anchor="start">7</text>
+<text class="s tkl" x="2472.8" y="28" text-anchor="start">visitors</text>
+<rect class="track" x="2537.6" y="6" width="87.4" height="34" rx="17"/>
+<text class="c mono tkv" x="2551.6" y="28" text-anchor="start">1k</text>
+<text class="s tkl" x="2574.4" y="28" text-anchor="start">clones</text>
+<rect class="track" x="2635" y="6" width="107.8" height="34" rx="17"/>
+<text class="c mono tkv" x="2649" y="28" text-anchor="start">100</text>
+<text class="s tkl" x="2680.2" y="28" text-anchor="start">commits</text>
+<rect class="track" x="2752.8" y="6" width="73.72" height="34" rx="17"/>
+<text class="c mono tkv" x="2766.8" y="28" text-anchor="start">10</text>
+<text class="s tkl" x="2789.6" y="28" text-anchor="start">PRs</text>
+<rect class="track" x="2836.52" y="6" width="82.6" height="34" rx="17"/>
+<text class="c mono tkv" x="2850.52" y="28" text-anchor="start">1</text>
+<text class="s tkl" x="2864.92" y="28" text-anchor="start">reviews</text>
+<rect class="track" x="2929.12" y="6" width="79" height="34" rx="17"/>
+<text class="c mono tkv" x="2943.12" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="2957.52" y="28" text-anchor="start">issues</text>
+<rect class="track" x="3018.12" y="6" width="235.9" height="34" rx="17"/>
+<circle cx="3037.12" cy="23" r="5" fill="#00add8"/>
+<text class="n tkv" x="3048.12" y="28" text-anchor="start">a-repository-name-fa…</text>
+<path class="star" transform="translate(3206.22 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="3223.22" y="28" text-anchor="start">50</text>
+<rect class="track" x="3264.02" y="6" width="168" height="34" rx="17"/>
+<circle cx="3283.02" cy="23" r="5" fill="#8b949e"/>
+<text class="n tkv" x="3294.02" y="28" text-anchor="start">no-language</text>
+<path class="star" transform="translate(3384.22 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="3401.22" y="28" text-anchor="start">50</text>
+<rect class="track" x="3442.02" y="6" width="132.3" height="34" rx="17"/>
+<circle cx="3461.02" cy="23" r="5" fill="#8b949e"/>
+<text class="n tkv" x="3472.02" y="28" text-anchor="start">unknown</text>
+<path class="star" transform="translate(3534.92 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="3551.92" y="28" text-anchor="start">3</text>
+<rect class="track" x="3584.32" y="6" width="137.2" height="34" rx="17"/>
+<circle cx="3603.32" cy="23" r="5" fill="#dea584"/>
+<text class="n tkv" x="3614.32" y="28" text-anchor="start">unstarred</text>
+<path class="star" transform="translate(3682.12 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="3699.12" y="28" text-anchor="start">0</text>
+</g>
+</svg>
+</svg>

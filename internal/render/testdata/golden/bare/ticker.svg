@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="106" viewBox="0 0 800 106" role="img" aria-labelledby="ghcTitle ghcDesc">
+<title id="ghcTitle">someone</title>
+<desc id="ghcDesc">GitHub summary for someone: 0 stars, 0 forks, 0 followers, 0 public repositories, 0 contributions in the last year, 0 repository views over the traffic window, 0 unique visitors over the traffic window, 0 clones over the traffic window, 0 commits in the last year, 0 pull requests in the last year, 0 reviews in the last year, 0 issues in the last year.</desc>
+<style>
+.bg{fill:#0d1117;stroke:#30363d}
+.panel{fill:#161b22}
+.t,.v,.big{fill:#e6edf3}
+.d,.l,.h,.s{fill:#8b949e}
+.n,.c{fill:#c9d1d9}
+.star,.pill-v{fill:#e3b341}
+.on-accent{fill:#0d1117}
+.line{stroke:#58a6ff}
+.area{fill:#58a6ff}
+.axis,.edge{stroke:#30363d}
+.track{fill:#30363d}
+.ok{fill:#3fb950}
+.fg{fill:#e6edf3}
+.h0{fill:#151b23}.h1{fill:#033a16}.h2{fill:#196c2e}.h3{fill:#2ea043}.h4{fill:#56d364}
+text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif}
+.mono{font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace}
+.t{font-size:18px;font-weight:600}
+.d{font-size:11px}
+.v{font-size:16px;font-weight:600}
+.big{font-size:24px;font-weight:700}
+.l{font-size:11px}
+.h{font-size:10px;font-weight:600;letter-spacing:0.08em}
+.n{font-size:12px}
+.s{font-size:11px}
+.c{font-size:12px}
+.line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.area{fill-opacity:0.14;stroke:none}
+.axis{stroke-width:1}
+.edge{fill:none;stroke-width:1}
+.tkv{font-size:14px}
+.tkl{font-size:12px}
+.m0{animation:m0 7.57s linear 1}
+@keyframes m0{0%{transform:translateX(0px)}100%{transform:translateX(-1060px)}}
+@media (prefers-reduced-motion:reduce){.m0{animation:none}}
+</style>
+<rect class="bg" x="0.5" y="0.5" width="799" height="105" rx="6"/>
+<text class="t" x="25" y="30" text-anchor="start">someone</text>
+<text class="s" x="775" y="30" text-anchor="end">@someone</text>
+<svg x="25" y="46" width="750" height="46">
+<g class="m0">
+<rect class="track" x="0" y="6" width="69.4" height="34" rx="17"/>
+<text class="c mono tkv" x="14" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="28.4" y="28" text-anchor="start">stars</text>
+<rect class="track" x="79.4" y="6" width="69.4" height="34" rx="17"/>
+<text class="c mono tkv" x="93.4" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="107.8" y="28" text-anchor="start">forks</text>
+<rect class="track" x="158.8" y="6" width="89.8" height="34" rx="17"/>
+<text class="c mono tkv" x="172.8" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="187.2" y="28" text-anchor="start">followers</text>
+<rect class="track" x="258.6" y="6" width="72.4" height="34" rx="17"/>
+<text class="c mono tkv" x="272.6" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="287" y="28" text-anchor="start">repos</text>
+<rect class="track" x="341" y="6" width="86.2" height="34" rx="17"/>
+<text class="c mono tkv" x="355" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="369.4" y="28" text-anchor="start">contribs</text>
+<rect class="track" x="437.2" y="6" width="72.4" height="34" rx="17"/>
+<text class="c mono tkv" x="451.2" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="465.6" y="28" text-anchor="start">views</text>
+<rect class="track" x="519.6" y="6" width="83.2" height="34" rx="17"/>
+<text class="c mono tkv" x="533.6" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="548" y="28" text-anchor="start">visitors</text>
+<rect class="track" x="612.8" y="6" width="79" height="34" rx="17"/>
+<text class="c mono tkv" x="626.8" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="641.2" y="28" text-anchor="start">clones</text>
+<rect class="track" x="701.8" y="6" width="91" height="34" rx="17"/>
+<text class="c mono tkv" x="715.8" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="730.2" y="28" text-anchor="start">commits</text>
+<rect class="track" x="802.8" y="6" width="65.32" height="34" rx="17"/>
+<text class="c mono tkv" x="816.8" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="831.2" y="28" text-anchor="start">PRs</text>
+<rect class="track" x="878.12" y="6" width="82.6" height="34" rx="17"/>
+<text class="c mono tkv" x="892.12" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="906.52" y="28" text-anchor="start">reviews</text>
+<rect class="track" x="970.72" y="6" width="79" height="34" rx="17"/>
+<text class="c mono tkv" x="984.72" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="999.12" y="28" text-anchor="start">issues</text>
+<rect class="track" x="1060" y="6" width="69.4" height="34" rx="17"/>
+<text class="c mono tkv" x="1074" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="1088.4" y="28" text-anchor="start">stars</text>
+<rect class="track" x="1139.4" y="6" width="69.4" height="34" rx="17"/>
+<text class="c mono tkv" x="1153.4" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="1167.8" y="28" text-anchor="start">forks</text>
+<rect class="track" x="1218.8" y="6" width="89.8" height="34" rx="17"/>
+<text class="c mono tkv" x="1232.8" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="1247.2" y="28" text-anchor="start">followers</text>
+<rect class="track" x="1318.6" y="6" width="72.4" height="34" rx="17"/>
+<text class="c mono tkv" x="1332.6" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="1347" y="28" text-anchor="start">repos</text>
+<rect class="track" x="1401" y="6" width="86.2" height="34" rx="17"/>
+<text class="c mono tkv" x="1415" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="1429.4" y="28" text-anchor="start">contribs</text>
+<rect class="track" x="1497.2" y="6" width="72.4" height="34" rx="17"/>
+<text class="c mono tkv" x="1511.2" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="1525.6" y="28" text-anchor="start">views</text>
+<rect class="track" x="1579.6" y="6" width="83.2" height="34" rx="17"/>
+<text class="c mono tkv" x="1593.6" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="1608" y="28" text-anchor="start">visitors</text>
+<rect class="track" x="1672.8" y="6" width="79" height="34" rx="17"/>
+<text class="c mono tkv" x="1686.8" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="1701.2" y="28" text-anchor="start">clones</text>
+<rect class="track" x="1761.8" y="6" width="91" height="34" rx="17"/>
+<text class="c mono tkv" x="1775.8" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="1790.2" y="28" text-anchor="start">commits</text>
+<rect class="track" x="1862.8" y="6" width="65.32" height="34" rx="17"/>
+<text class="c mono tkv" x="1876.8" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="1891.2" y="28" text-anchor="start">PRs</text>
+<rect class="track" x="1938.12" y="6" width="82.6" height="34" rx="17"/>
+<text class="c mono tkv" x="1952.12" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="1966.52" y="28" text-anchor="start">reviews</text>
+<rect class="track" x="2030.72" y="6" width="79" height="34" rx="17"/>
+<text class="c mono tkv" x="2044.72" y="28" text-anchor="start">0</text>
+<text class="s tkl" x="2059.12" y="28" text-anchor="start">issues</text>
+</g>
+</svg>
+</svg>

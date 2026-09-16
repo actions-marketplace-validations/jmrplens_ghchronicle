@@ -26,20 +26,32 @@ func TestATimelineThatPlaysOnceEndsWhenItsLastBeatDoes(t *testing.T) {
 	}
 }
 
-// TestALoopingTimelineRestsBeforeItPlaysAgain checks the two things a loop
-// adds: a cycle longer than the animation by loopRest, and percentages that
-// squeeze the beat into the front of it so the card holds still after.
-func TestALoopingTimelineRestsBeforeItPlaysAgain(t *testing.T) {
-	tl := newTimeline(MotionLoop)
-	tl.add(effectFade, 0, 1.6, "ease-out")
-	css := tl.css()
-	for _, want := range []string{
-		".m0{animation:m0 8.6s ease-out infinite}",
-		"@keyframes m0{0%{opacity:0}18.6%,100%{opacity:1}}",
-	} {
-		if !strings.Contains(css, want) {
-			t.Errorf("css lacks %q:\n%s", want, css)
-		}
+// TestALoopNeverReplaysAReveal is the rule the whole feature now turns on. A
+// reveal shows the reader something; replaying it takes that something away
+// again, and a card in a README must not do that. So a timeline of reveals
+// writes the same stylesheet under loop as under once, down to the byte, and
+// the card a reader gets is the same card.
+//
+// The author's decision, 2026-09-16, after seeing the layouts move. It is also
+// why the cycle no longer grows by a rest under loop: there is no second play
+// to hold the card still before.
+func TestALoopNeverReplaysAReveal(t *testing.T) {
+	reveal := func(motion string) string {
+		tl := newTimeline(motion)
+		tl.add(effectFade, 0, 1.6, "ease-out")
+		tl.add(effectDraw, 0.4, 1.2, "linear")
+		tl.add(effectGrowX, 1.6, 0.9, "ease-out")
+		return tl.css()
+	}
+	once, loop := reveal(MotionOnce), reveal(MotionLoop)
+	if once != loop {
+		t.Errorf("loop wrote a different stylesheet from once:\n%s\nwant\n%s", loop, once)
+	}
+	if strings.Contains(loop, "infinite") {
+		t.Errorf("nothing a reveal does may repeat:\n%s", loop)
+	}
+	if !strings.Contains(once, ".m0{animation:m0 2.5s ease-out 1}") {
+		t.Errorf("the cycle must end with the last beat:\n%s", once)
 	}
 }
 
@@ -54,7 +66,7 @@ func TestAStaggeredBeatWaitsInsideItsKeyframes(t *testing.T) {
 	if strings.Contains(css, "animation-delay") {
 		t.Errorf("a stagger must not use animation-delay:\n%s", css)
 	}
-	if !strings.Contains(css, "@keyframes m1{0%,11.11%{opacity:0}22.22%,100%{opacity:1}}") {
+	if !strings.Contains(css, "@keyframes m1{0%,50%{opacity:0}100%{opacity:1}}") {
 		t.Errorf("the second beat does not wait for its start inside the cycle:\n%s", css)
 	}
 }
@@ -158,21 +170,153 @@ func TestAGrowAtTheStartOfTheCycleWritesACleanFirstStop(t *testing.T) {
 	}
 }
 
-// TestAGrowingBarRestsAtFullWidthBetweenTheLapsOfALoop is what a loop asks of
-// this effect that a single play does not: the bar has to hold the width it
-// grew to for the rest of the cycle, or a looping card would show it snap back
-// and sit at nothing until the next lap.
-func TestAGrowingBarRestsAtFullWidthBetweenTheLapsOfALoop(t *testing.T) {
-	tl := newTimeline(MotionLoop)
-	tl.add(effectGrowX, 0, 1.6, "ease-out")
+// TestAGrowingBarStaysGrownWhateverTheMotion is what a bar owes a reader: it
+// reaches its width and stays there. It is a reveal, so loop asks nothing of
+// it that once does not, and a bar that snapped back to nothing every few
+// seconds is exactly the card the rule forbids.
+func TestAGrowingBarStaysGrownWhateverTheMotion(t *testing.T) {
+	for _, motion := range []string{MotionOnce, MotionLoop} {
+		tl := newTimeline(motion)
+		tl.add(effectGrowX, 0, 1.6, "ease-out")
+		css := tl.css()
+		for _, want := range []string{
+			".m0{animation:m0 1.6s ease-out 1;transform-box:fill-box;transform-origin:left}",
+			"@keyframes m0{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}",
+		} {
+			if !strings.Contains(css, want) {
+				t.Errorf("under %s the css lacks %q:\n%s", motion, want, css)
+			}
+		}
+	}
+}
+
+// TestACoverTypesTextInAndSettlesWhereItWasDrawn covers the effect the
+// terminal window is built on: the cover starts one width to the left, over
+// the text, and ends untranslated, where the layout drew it and where it hides
+// nothing. The steps are the beat's easing, one per character, which is what
+// makes the text arrive a character at a time.
+func TestACoverTypesTextInAndSettlesWhereItWasDrawn(t *testing.T) {
+	tl := newTimeline(MotionOnce)
+	tl.addShift(effectType, 0, 0.5, "steps(3)", 21.6)
 	css := tl.css()
 	for _, want := range []string{
-		".m0{animation:m0 8.6s ease-out infinite;transform-box:fill-box;transform-origin:left}",
-		"@keyframes m0{0%{transform:scaleX(0)}18.6%,100%{transform:scaleX(1)}}",
+		".m0{animation:m0 0.5s steps(3) 1}",
+		"@keyframes m0{0%{transform:translateX(-21.6px)}100%{transform:translateX(0px)}}",
 	} {
 		if !strings.Contains(css, want) {
 			t.Errorf("css lacks %q:\n%s", want, css)
 		}
+	}
+	// It translates, so it needs neither a box to measure against nor an edge
+	// to work from: a px on an SVG element is a user unit wherever it sits.
+	if strings.Contains(css, "transform-box") {
+		t.Errorf("a translation needs no transform box:\n%s", css)
+	}
+}
+
+// TestACoverNeverGoesBackOverANumberItHasTyped is the rule read off the one
+// effect that would break it most plainly. A cover put back over a number is a
+// number taken away from a reader who has already read it, so typing never
+// repeats: under loop the cover is written exactly as it is under once.
+func TestACoverNeverGoesBackOverANumberItHasTyped(t *testing.T) {
+	typed := func(motion string) string {
+		tl := newTimeline(motion)
+		tl.addShift(effectType, 0, 0.5, "steps(3)", 21.6)
+		return tl.css()
+	}
+	css := typed(MotionLoop)
+	if css != typed(MotionOnce) {
+		t.Errorf("loop wrote a different cover from once:\n%s", css)
+	}
+	for _, want := range []string{
+		".m0{animation:m0 0.5s steps(3) 1}",
+		"@keyframes m0{0%{transform:translateX(-21.6px)}100%{transform:translateX(0px)}}",
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("css lacks %q:\n%s", want, css)
+		}
+	}
+	// And a cover that starts part way into the cycle waits over its text
+	// until its own beat, rather than uncovering with the one above it.
+	staggered := newTimeline(MotionOnce)
+	staggered.addShift(effectType, 0, 0.5, "steps(2)", 10)
+	staggered.addShift(effectType, 0.5, 0.5, "steps(2)", 10)
+	if want := "@keyframes m1{0%,50%{transform:translateX(-10px)}100%{transform:translateX(0px)}}"; !strings.Contains(staggered.css(), want) {
+		t.Errorf("css lacks %q:\n%s", want, staggered.css())
+	}
+}
+
+// TestABandSlidesByOneCopyAndHoldsThere is the effect the ticker scrolls with,
+// and the half of it a loop needs: the band holds the shift it reached for the
+// rest of the cycle instead of snapping back and waiting at the start.
+func TestABandSlidesByOneCopyAndHoldsThere(t *testing.T) {
+	once := newTimeline(MotionOnce)
+	once.addShift(effectSlide, 0, 4, "linear", 500)
+	if want := "@keyframes m0{0%{transform:translateX(0px)}100%{transform:translateX(-500px)}}"; !strings.Contains(once.css(), want) {
+		t.Errorf("css lacks %q:\n%s", want, once.css())
+	}
+	// A band is continuous, so under loop it is the one thing that repeats,
+	// and it repeats on its own turn with nothing added and nothing held: one
+	// pass, then the next, which is what scrolling is.
+	loop := newTimeline(MotionLoop)
+	loop.addShift(effectSlide, 0, 4, "linear", 500)
+	for _, want := range []string{
+		".m0{animation:m0 4s linear infinite}",
+		"@keyframes m0{0%{transform:translateX(0px)}100%{transform:translateX(-500px)}}",
+	} {
+		if !strings.Contains(loop.css(), want) {
+			t.Errorf("css lacks %q:\n%s", want, loop.css())
+		}
+	}
+}
+
+// TestACursorBlinksThroughItsBeatAndEndsLit is what makes the terminal a card
+// that settles: the one effect here with no natural end blinks a whole number
+// of times inside its beat, is lit before it and is lit from its end to the
+// end of the cycle, so the still card has a cursor in a state a reader could
+// point at rather than half a one.
+func TestACursorBlinksThroughItsBeatAndEndsLit(t *testing.T) {
+	tl := newTimeline(MotionOnce)
+	tl.add(effectBlink, 0, 1, "linear")
+	css := tl.css()
+	// One second is two blinks at blinkPeriod: lit, dark, lit, dark, lit.
+	want := "@keyframes m0{0%,24.99%{opacity:1}25%,49.99%{opacity:0}50%,74.99%{opacity:1}75%,99.99%{opacity:0}100%{opacity:1}}"
+	if !strings.Contains(css, want) {
+		t.Errorf("css lacks %q:\n%s", want, css)
+	}
+	if !strings.HasSuffix(strings.TrimSpace(strings.Split(css, "@media")[0]), "100%{opacity:1}}") {
+		t.Errorf("a blink must end lit:\n%s", css)
+	}
+	// A beat shorter than one blink still blinks once rather than not at all.
+	short := newTimeline(MotionOnce)
+	short.add(effectBlink, 0, 0.1, "linear")
+	if got := strings.Count(short.css(), "{opacity:0}"); got != 1 {
+		t.Errorf("a beat too short for a whole blink went dark %d times, want once:\n%s", got, short.css())
+	}
+	// Under a loop the cursor is the one thing that keeps going, and it keeps
+	// going on its own cadence rather than inside the card's cycle: one turn,
+	// lit for half of it and dark for the other half, repeated for ever. The
+	// beat's own length is how long it blinks before a card that settles
+	// settles, which a card that never settles has no use for.
+	forever := newTimeline(MotionLoop)
+	forever.add(effectBlink, 1.4, 1, "linear")
+	for _, want := range []string{
+		".m0{animation:m0 0.5s linear infinite}",
+		"@keyframes m0{0%,49.99%{opacity:1}50%,100%{opacity:0}}",
+	} {
+		if !strings.Contains(forever.css(), want) {
+			t.Errorf("css lacks %q:\n%s", want, forever.css())
+		}
+	}
+	// The beat above was placed at 1.4 seconds and the one below at zero, and
+	// they write the same thing: a beat that repeats for ever begins at once,
+	// because waiting once before the first turn would take an
+	// animation-delay and this engine writes none. A layout that needs a
+	// continuous beat to wait needs that rule relaxed first; see period.
+	fromTheStart := newTimeline(MotionLoop)
+	fromTheStart.add(effectBlink, 0, 1, "linear")
+	if forever.css() != fromTheStart.css() {
+		t.Errorf("a continuous beat's start reached its keyframes:\n%s\nagainst\n%s", forever.css(), fromTheStart.css())
 	}
 }
 

@@ -133,15 +133,43 @@ renderizador que ignora la animación muestra el estado final, y
 | `-card-motion` | Qué hace la tarjeta                                                           |
 | -------------- | ----------------------------------------------------------------------------- |
 | `once`         | Se reproduce al cargar y se queda quieta. Es el valor por defecto             |
-| `loop`         | Se reproduce, mantiene la tarjeta terminada siete segundos y vuelve a empezar |
+| `loop`         | Lo mismo, y lo que el diseño tenga que no termine sigue moviéndose para siempre |
 | `off`          | Sin animación, y un fichero más pequeño                                       |
 
-La pausa entre vueltas es deliberada: un README que se mueve todo el rato cuesta
-de leer. Aun así, una tarjeta en bucle sigue moviéndose para todo el que lee el
-README, y un README no le da ningún control sobre ella, así que `once` es la
-opción respetuosa para un perfil.
+### Un bucle nunca repite
 
-<Card name="animated-counters" loop alt="El diseño animated-counters reproducido una vez: las cifras cuentan y se detienen, y la página también puede reproducirlo en bucle" />
+La animación aquí revela contenido: una cifra cuenta hasta lo que vale, una
+barra crece hasta su porcentaje, una línea se dibuja sola. Reproducir eso otra
+vez sería quitarle a quien lee algo que ya se le había mostrado, y una tarjeta
+que esconde sus propias cifras cada pocos segundos es peor que una quieta.
+
+Así que `loop` no significa "y otra vez". La revelación se reproduce una sola
+vez y se asienta en los dos modos, y lo único que puede seguir para siempre es
+el movimiento que no pone nada en la tarjeta ni se lo lleva. Dos diseños tienen
+algo así:
+
+- `terminal`, cuyo cursor parpadea en el prompt desde que se dibuja la ventana.
+  Las cifras se siguen tecleando una sola vez. Con `once`, en cambio, el cursor
+  espera a la última, parpadea un par de veces y se queda encendido.
+- `ticker`, cuya banda de píldoras sigue desplazándose. No desaparece nada; las
+  mismas píldoras vuelven a pasar.
+
+En cualquier otro diseño `loop` dibuja exactamente la tarjeta que dibuja `once`,
+byte a byte. Se acepta en vez de rechazarse, así que un workflow puede fijarlo
+una vez y cambiar `card-layout` con libertad.
+
+`once` sigue siendo la opción respetuosa para un perfil, y más que antes. Una
+tarjeta en bucle se mueve para todo el que abre el README, y ninguno de los dos
+que pueden hacerlo tiene pausa: el cursor parpadea y la banda se desplaza sin
+descanso entre pasadas, donde las tarjetas en bucle que esto sustituye se
+quedaban quietas siete segundos entre reproducciones. Un README no le da a quien
+lee ninguna forma de pararla. Su única salida es `prefers-reduced-motion`, que
+se la desactiva, pero que es un ajuste de toda su máquina y no un control sobre
+tu tarjeta. Es la misma razón por la que la página de diseños nunca muestra una
+tarjeta en bucle hasta que se pulsa el botón (WCAG 2.2.2, Pausar, detener,
+ocultar).
+
+<Card name="terminal" animated loop alt="El diseño terminal reproducido una vez: una ventana de terminal cuyas líneas de salida tienen cada una un número que se teclea solo, con un cursor de bloque encendido en el prompt de abajo que parpadea cuando aterriza la última cifra, y la página también puede reproducirlo en bucle, donde el tecleo sigue ocurriendo una vez y solo sigue el cursor, parpadeando desde el principio" />
 
 ## En un README
 

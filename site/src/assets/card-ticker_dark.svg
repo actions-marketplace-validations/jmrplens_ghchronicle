@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="106" viewBox="0 0 800 106" role="img" aria-labelledby="ghcTitle ghcDesc">
+<title id="ghcTitle">octocat</title>
+<desc id="ghcDesc">GitHub summary for octocat: 614 stars, 80 forks, 1200 followers, 42 public repositories, 1663 contributions in the last year, 812 commits in the last year, 9695 repository views in the last 14 days. Most starred repositories: chronicle-cli with 240 stars in Go, pixel-garden with 156 stars in TypeScript, tide-tables with 97 stars in Python, hello-world with 80 stars in Go, dotfiles with 41 stars in Shell.</desc>
+<style>
+.bg{fill:#0d1117;stroke:#30363d}
+.panel{fill:#161b22}
+.t,.v,.big{fill:#e6edf3}
+.d,.l,.h,.s{fill:#8b949e}
+.n,.c{fill:#c9d1d9}
+.star,.pill-v{fill:#e3b341}
+.on-accent{fill:#0d1117}
+.line{stroke:#58a6ff}
+.area{fill:#58a6ff}
+.axis,.edge{stroke:#30363d}
+.track{fill:#30363d}
+.ok{fill:#3fb950}
+.fg{fill:#e6edf3}
+.h0{fill:#151b23}.h1{fill:#033a16}.h2{fill:#196c2e}.h3{fill:#2ea043}.h4{fill:#56d364}
+text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif}
+.mono{font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace}
+.t{font-size:18px;font-weight:600}
+.d{font-size:11px}
+.v{font-size:16px;font-weight:600}
+.big{font-size:24px;font-weight:700}
+.l{font-size:11px}
+.h{font-size:10px;font-weight:600;letter-spacing:0.08em}
+.n{font-size:12px}
+.s{font-size:11px}
+.c{font-size:12px}
+.line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.area{fill-opacity:0.14;stroke:none}
+.axis{stroke-width:1}
+.edge{fill:none;stroke-width:1}
+.tkv{font-size:14px}
+.tkl{font-size:12px}
+.m0{animation:m0 11.44s linear 1}
+@keyframes m0{0%{transform:translateX(0px)}100%{transform:translateX(-1601px)}}
+@media (prefers-reduced-motion:reduce){.m0{animation:none}}
+</style>
+<rect class="bg" x="0.5" y="0.5" width="799" height="105" rx="6"/>
+<text class="t" x="25" y="30" text-anchor="start">octocat</text>
+<text class="s" x="775" y="30" text-anchor="end">@octocat</text>
+<svg x="25" y="46" width="750" height="46">
+<g class="m0">
+<rect class="track" x="0" y="6" width="86.2" height="34" rx="17"/>
+<text class="c mono tkv" x="14" y="28" text-anchor="start">614</text>
+<text class="s tkl" x="45.2" y="28" text-anchor="start">stars</text>
+<rect class="track" x="96.2" y="6" width="77.8" height="34" rx="17"/>
+<text class="c mono tkv" x="110.2" y="28" text-anchor="start">80</text>
+<text class="s tkl" x="133" y="28" text-anchor="start">forks</text>
+<rect class="track" x="184" y="6" width="115" height="34" rx="17"/>
+<text class="c mono tkv" x="198" y="28" text-anchor="start">1.2k</text>
+<text class="s tkl" x="237.6" y="28" text-anchor="start">followers</text>
+<rect class="track" x="309" y="6" width="80.8" height="34" rx="17"/>
+<text class="c mono tkv" x="323" y="28" text-anchor="start">42</text>
+<text class="s tkl" x="345.8" y="28" text-anchor="start">repos</text>
+<rect class="track" x="399.8" y="6" width="111.4" height="34" rx="17"/>
+<text class="c mono tkv" x="413.8" y="28" text-anchor="start">1.7k</text>
+<text class="s tkl" x="453.4" y="28" text-anchor="start">contribs</text>
+<rect class="track" x="521.2" y="6" width="107.8" height="34" rx="17"/>
+<text class="c mono tkv" x="535.2" y="28" text-anchor="start">812</text>
+<text class="s tkl" x="566.4" y="28" text-anchor="start">commits</text>
+<rect class="track" x="639" y="6" width="97.6" height="34" rx="17"/>
+<text class="c mono tkv" x="653" y="28" text-anchor="start">9.7k</text>
+<text class="s tkl" x="692.6" y="28" text-anchor="start">views</text>
+<rect class="track" x="746.6" y="6" width="177.8" height="34" rx="17"/>
+<circle cx="765.6" cy="23" r="5" fill="#00add8"/>
+<text class="n tkv" x="776.6" y="28" text-anchor="start">chronicle-cli</text>
+<path class="star" transform="translate(868.2 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="885.2" y="28" text-anchor="start">240</text>
+<rect class="track" x="934.4" y="6" width="177.1" height="34" rx="17"/>
+<circle cx="953.4" cy="23" r="5" fill="#3178c6"/>
+<text class="n tkv" x="964.4" y="28" text-anchor="start">pixel-garden</text>
+<path class="star" transform="translate(1055.3 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="1072.3" y="28" text-anchor="start">156</text>
+<rect class="track" x="1121.5" y="6" width="157.5" height="34" rx="17"/>
+<circle cx="1140.5" cy="23" r="5" fill="#3572a5"/>
+<text class="n tkv" x="1151.5" y="28" text-anchor="start">tide-tables</text>
+<path class="star" transform="translate(1231.2 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="1248.2" y="28" text-anchor="start">97</text>
+<rect class="track" x="1289" y="6" width="157.5" height="34" rx="17"/>
+<circle cx="1308" cy="23" r="5" fill="#00add8"/>
+<text class="n tkv" x="1319" y="28" text-anchor="start">hello-world</text>
+<path class="star" transform="translate(1398.7 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="1415.7" y="28" text-anchor="start">80</text>
+<rect class="track" x="1456.5" y="6" width="134.4" height="34" rx="17"/>
+<circle cx="1475.5" cy="23" r="5" fill="#89e051"/>
+<text class="n tkv" x="1486.5" y="28" text-anchor="start">dotfiles</text>
+<path class="star" transform="translate(1543.1 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="1560.1" y="28" text-anchor="start">41</text>
+<rect class="track" x="1601" y="6" width="86.2" height="34" rx="17"/>
+<text class="c mono tkv" x="1615" y="28" text-anchor="start">614</text>
+<text class="s tkl" x="1646.2" y="28" text-anchor="start">stars</text>
+<rect class="track" x="1697.2" y="6" width="77.8" height="34" rx="17"/>
+<text class="c mono tkv" x="1711.2" y="28" text-anchor="start">80</text>
+<text class="s tkl" x="1734" y="28" text-anchor="start">forks</text>
+<rect class="track" x="1785" y="6" width="115" height="34" rx="17"/>
+<text class="c mono tkv" x="1799" y="28" text-anchor="start">1.2k</text>
+<text class="s tkl" x="1838.6" y="28" text-anchor="start">followers</text>
+<rect class="track" x="1910" y="6" width="80.8" height="34" rx="17"/>
+<text class="c mono tkv" x="1924" y="28" text-anchor="start">42</text>
+<text class="s tkl" x="1946.8" y="28" text-anchor="start">repos</text>
+<rect class="track" x="2000.8" y="6" width="111.4" height="34" rx="17"/>
+<text class="c mono tkv" x="2014.8" y="28" text-anchor="start">1.7k</text>
+<text class="s tkl" x="2054.4" y="28" text-anchor="start">contribs</text>
+<rect class="track" x="2122.2" y="6" width="107.8" height="34" rx="17"/>
+<text class="c mono tkv" x="2136.2" y="28" text-anchor="start">812</text>
+<text class="s tkl" x="2167.4" y="28" text-anchor="start">commits</text>
+<rect class="track" x="2240" y="6" width="97.6" height="34" rx="17"/>
+<text class="c mono tkv" x="2254" y="28" text-anchor="start">9.7k</text>
+<text class="s tkl" x="2293.6" y="28" text-anchor="start">views</text>
+<rect class="track" x="2347.6" y="6" width="177.8" height="34" rx="17"/>
+<circle cx="2366.6" cy="23" r="5" fill="#00add8"/>
+<text class="n tkv" x="2377.6" y="28" text-anchor="start">chronicle-cli</text>
+<path class="star" transform="translate(2469.2 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="2486.2" y="28" text-anchor="start">240</text>
+<rect class="track" x="2535.4" y="6" width="177.1" height="34" rx="17"/>
+<circle cx="2554.4" cy="23" r="5" fill="#3178c6"/>
+<text class="n tkv" x="2565.4" y="28" text-anchor="start">pixel-garden</text>
+<path class="star" transform="translate(2656.3 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="2673.3" y="28" text-anchor="start">156</text>
+<rect class="track" x="2722.5" y="6" width="157.5" height="34" rx="17"/>
+<circle cx="2741.5" cy="23" r="5" fill="#3572a5"/>
+<text class="n tkv" x="2752.5" y="28" text-anchor="start">tide-tables</text>
+<path class="star" transform="translate(2832.2 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="2849.2" y="28" text-anchor="start">97</text>
+<rect class="track" x="2890" y="6" width="157.5" height="34" rx="17"/>
+<circle cx="2909" cy="23" r="5" fill="#00add8"/>
+<text class="n tkv" x="2920" y="28" text-anchor="start">hello-world</text>
+<path class="star" transform="translate(2999.7 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="3016.7" y="28" text-anchor="start">80</text>
+<rect class="track" x="3057.5" y="6" width="134.4" height="34" rx="17"/>
+<circle cx="3076.5" cy="23" r="5" fill="#89e051"/>
+<text class="n tkv" x="3087.5" y="28" text-anchor="start">dotfiles</text>
+<path class="star" transform="translate(3144.1 17) scale(0.8)" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+<text class="c mono tkv" x="3161.1" y="28" text-anchor="start">41</text>
+</g>
+</svg>
+</svg>

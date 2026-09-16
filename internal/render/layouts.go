@@ -54,8 +54,15 @@ type Layout struct {
 	Family      string // "chronicle" or "github"
 	Description string
 	Animated    bool
-	Fields      []string // the default set, in drawing order
-	Supports    []string // every field the layout can show
+	// Loops is whether the layout has something continuous that may run for
+	// ever: a cursor that blinks, a band that scrolls. Only such a thing may,
+	// because a reveal replayed takes back content the reader has already been
+	// shown. A layout that is Animated and not Loops draws the same card under
+	// MotionLoop as under MotionOnce, to the byte, and the gallery writes it no
+	// looping picture.
+	Loops    bool
+	Fields   []string // the default set, in drawing order
+	Supports []string // every field the layout can show
 }
 
 type layoutDef struct {
@@ -161,6 +168,30 @@ var layouts = []layoutDef{
 		Supports:    join(allNumeric, fieldSparkline),
 
 		width: defaultWidth, minWidth: minWidth, draw: drawAnimatedCounters,
+	},
+	{
+		Name: "terminal", Family: "chronicle", Animated: true, Loops: true,
+		Description: "A terminal window with the project's mark: one line of output per number, each number typed in, and a cursor at the prompt that blinks when the last of them lands, or from the start and for ever under loop.",
+		Fields:      []string{fieldStars, fieldForks, fieldFollowers, fieldRepos, fieldContributions, fieldTopRepos},
+		Supports:    join(allNumeric, fieldTopRepos),
+
+		width: defaultWidth, minWidth: 360, draw: drawTerminal,
+	},
+	{
+		Name: "ticker", Family: "chronicle", Animated: true, Loops: true,
+		Description: "A band of pills, one per number and one per repository, scrolling from right to left without a seam, at a fixed speed, so a pass takes as long as the content is wide.",
+		Fields:      []string{fieldStars, fieldForks, fieldFollowers, fieldRepos, fieldContributions, fieldCommits, fieldViews, fieldTopRepos},
+		Supports:    join(allNumeric, fieldTopRepos),
+
+		width: 800, minWidth: 400, draw: drawTicker,
+	},
+	{
+		Name: "language-bars", Family: "github", Animated: true,
+		Description: "One bar per language, each growing from its own left edge after the one above it, with the name and the share arriving behind it.",
+		Fields:      []string{fieldLanguages},
+		Supports:    join(allNumeric, fieldLanguages),
+
+		width: defaultWidth, minWidth: 360, draw: drawLanguageBars,
 	},
 }
 
