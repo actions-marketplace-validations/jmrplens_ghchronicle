@@ -35,6 +35,15 @@
  *  - on a table its page names as an INDEX, `data-form="index"` on the
  *    container. See "Index tables" below.
  *
+ *  - on a table its page names in `defaultColumns`, `data-form="default"` on
+ *    the container and `data-role="default"` on the cell that holds the row's
+ *    default, wherever that column sits, and only where that cell holds a
+ *    value rather than a sentence. See "Default columns" below.
+ *
+ *  - `data-role="identity"` on a first cell that is the row's NAME, which is
+ *    what styles/tables.css sizes as the block's title. See "The row's name"
+ *    below.
+ *
  * Why the stacked form exists at all, measured on the built site before it
  * did: all 98 tables of the corpus, in both languages, overflowed the column
  * they sit in at a 360 px and at a 400 px viewport, by 176 px to 417 px.
@@ -79,6 +88,109 @@ import { localeOf, routeOf } from "./site.mjs";
  *
  * The markdown is not touched, so the twin, docs/ and llms-full.txt read the
  * table exactly as written.
+ *
+ * DEFAULT COLUMNS. A reference table (a key, a flag, a rule) stays a
+ * reference: stacking is still right for it, its rows are not an index. But
+ * its first cell used to spend a whole labelled block on the row's default,
+ * one KEY/FLAG card followed by a whole DEFAULT card for one short value, and
+ * the author read that on a phone and asked for the value beside the label
+ * instead: same line, right-hand side, one block fewer per row.
+ *
+ * Which column that is is again the page's judgement, named in its
+ * frontmatter as pairs of headings,
+ *
+ *     defaultColumns:
+ *       - table: Key
+ *         default: Default
+ *
+ * `table` is the heading that picks the table (every one whose first column
+ * has that heading, so two tables sharing a heading, as configuration/'s two
+ * `Key` tables do, both get it from one entry), `default` is the heading of
+ * the column to hoist. A `table` naming no table on the page, or a `default`
+ * naming no column of the table it did find, is an error for the same reason
+ * a bad indexTables entry is: a column renamed in the markdown must not put
+ * the default back in its own box without a word. A `default` naming the
+ * FIRST column is an error too, since the row's name and the row's default
+ * would be the same cell and the card would render with nothing on the left.
+ * A table named in both `indexTables` and `defaultColumns` is also an error:
+ * the compact form already runs every column but the first inline, so the two
+ * treatments have nothing to agree on.
+ *
+ * WHICH CELLS, and why the page cannot decide this one. A hoisted cell is
+ * read without its kicker: it is a value in the corner of the card, and the
+ * position is what says "default". That works for a value and not for a
+ * sentence. `web_url`'s default is "derived from the API": hoisted and
+ * unlabelled it read as a fragment about the key, and `sinks.dedupe_file`'s,
+ * a sentence with two code fragments in it, wrapped into four ragged
+ * right-aligned lines with `<name>-written.bin` broken across two of them,
+ * which read as broken markup. So the mechanism keys on what the CELL is, not
+ * on what the page declared: `isValue()`, one unbroken run of characters with
+ * no space in it, is marked and hoisted; anything else keeps the labelled
+ * block it always had, in place, at the full width of the row. A declared
+ * table whose every default is a sentence is an error rather than a silent
+ * no-op. Backticks are not the test: this corpus writes `off`, `none`,
+ * `required` and `api.github.com` without them and they are values all the
+ * same, while an error message inside a code span is still a sentence.
+ */
+
+/*
+ * THE ROW'S NAME. Stacked, a row is a card and its first cell is the card's
+ * title, which styles/tables.css sizes apart from the values under it. That is
+ * true of a first cell that NAMES the row, and false of two shapes this corpus
+ * also has, so the name is marked here rather than guessed at in CSS:
+ *
+ *  - a first cell with no `code` in it is not marked. Every per-row identity
+ *    on the tables this treatment was asked for is written as a code span
+ *    (`token`, `-once`, `every.families`), and the cells that are not are
+ *    prose rows like configuration/cadences.mdx's "the built-in table", which
+ *    read as a heading floating over the row rather than as a title. 168 of
+ *    the corpus's 718 stacked first cells hold no code span and stay at body
+ *    size deliberately; /api/cost/'s thirty-four family names are the set
+ *    worth backticking in the markdown one day, which is the page's decision
+ *    and not this file's.
+ *  - a first column that REPEATS names nothing. configuration/cadences.mdx's
+ *    34-row `Group` table has `account` on eight consecutive rows, so eight
+ *    cards would carry the same title while the cell that tells them apart,
+ *    the family, sat below it in body type. A column with a duplicate in it
+ *    is not an identifier, and no cell of that table is marked.
+ *  - a page can also say so itself, in `plainTables`, by the heading of the
+ *    first column, for a table whose first cell is a sentence that happens to
+ *    contain a code span: configuration/index.mdx's `Remembers` and `Message`
+ *    tables, whose first cells are "`last_head`, the commit each repository
+ *    was on ..." and a whole validation message. `:has(code)` cannot tell
+ *    those from `-card <path>` or from an install command, both of which are
+ *    genuine names with a space in them, so the judgement is the page's, the
+ *    way it already is for an index. A name matching no table on the page is
+ *    an error, for the reason a bad indexTables entry is.
+ *
+ * WHERE A NAME MAY BREAK. Stacked, `td code` carries `overflow-wrap: anywhere`
+ * (styles/tables.css), which is what keeps a sixty-character path inside a
+ * 328 px screen, and which breaks wherever it runs out of room:
+ * `sinks.dedupe_horizo` / `n`. That is the worst place to break a name, and it
+ * is reachable: at a 360 px viewport with a 16 px root two keys of this corpus
+ * broke mid-token, and at a 24 px root (200 % text, the size accessibility
+ * guidance is written around) seventy-two did. The title size this file marks
+ * for is part of why: at the size those cells had before it, the same two
+ * counts are zero and twenty-four. `overflow-wrap` is not the thing to remove,
+ * because the alternative to a bad break is a card that overflows, and
+ * shrinking the key back is not it either, because a reader who asked for
+ * 200 % text is the last one who should be handed a smaller title.
+ *
+ * So the name is given the break opportunities it already carries, as a `wbr`
+ * after each one: a separator with a character of its own before it (`sinks.`
+ * `dedupe_` `horizon`, `-backfill-` `since`, `read:` `packages`, `/users/`
+ * `{login}/`, `<dark|` `light|`), and a camel-case hump (`Protect` `Kernel` `Tunables`,
+ * `Restrict` `SUIDSGID`), which is where a reader of these identifiers breaks
+ * them anyway. A real break opportunity outranks `overflow-wrap: anywhere`,
+ * which is last-resort by definition, so a key that carries a boundary now
+ * breaks at one; a key that carries none is unchanged and still breaks where
+ * it must. The one break a key carries and should not take is after the
+ * leading `-` of a flag, which is the first character of its name rather than
+ * a boundary inside it; those two characters are held together instead (see
+ * `LEADING_DASH`). `wbr` adds no character to the text, nothing to the accessibility
+ * tree and nothing to what a reader copies, and `white-space: nowrap`
+ * suppresses it, so the wide form is untouched.
+ * scripts/check-table-fit.mjs asserts it at a 24 px root.
  */
 
 /** What the region is called, per locale. */
@@ -186,10 +298,229 @@ function indexTablesOf(file) {
 	return Array.isArray(declared) ? declared.map(String) : [];
 }
 
+/**
+ * The `{table, default}` pairs a page declared, read off the frontmatter
+ * Astro hands every plugin.
+ *
+ * @param {any} file the vfile rehype passes through
+ * @returns {{ table: string, default: string }[]}
+ */
+function defaultColumnsOf(file) {
+	const declared = file?.data?.astro?.frontmatter?.defaultColumns;
+	return Array.isArray(declared)
+		? declared.map((entry) => ({
+				table: String(entry.table),
+				default: String(entry.default),
+			}))
+		: [];
+}
+
+/**
+ * The first-column headings a page declared as plain: tables whose first cell
+ * is not the row's name.
+ *
+ * @param {any} file the vfile rehype passes through
+ * @returns {string[]}
+ */
+function plainTablesOf(file) {
+	const declared = file?.data?.astro?.frontmatter?.plainTables;
+	return Array.isArray(declared) ? declared.map(String) : [];
+}
+
+/**
+ * Whether a cell holds a value rather than a sentence: one unbroken run of
+ * characters with no space in it. `500`, `off`, `api.github.com` and `ninguno`
+ * are values; "derived from the API" is not, and neither is a sentence that
+ * happens to be written inside a code span.
+ *
+ * @param {any} cell
+ * @returns {boolean}
+ */
+function isValue(cell) {
+	const text = textOf(cell).trim();
+	return text.length > 0 && !/\s/.test(text);
+}
+
+/** Whether a `code` element sits anywhere inside this node. */
+function hasCode(node) {
+	if (node.type === "element" && node.tagName === "code") return true;
+	return (node.children ?? []).some((child) => hasCode(child));
+}
+
+/** The first cell of every body row of a table, in document order. */
+function firstCells(table) {
+	const cells = [];
+	for (const group of childrenNamed(table, ROW_GROUPS)) {
+		if (group.tagName === "thead") continue;
+		for (const row of childrenNamed(group, ROWS)) {
+			const cell = childrenNamed(row, CELLS)[0];
+			if (cell) cells.push(cell);
+		}
+	}
+	return cells;
+}
+
+/**
+ * Every boundary an identifier of this corpus carries, as a zero-width split
+ * point: a separator (`. _ - : = / , ; @ |`) that has a character of its own
+ * before it, so a leading `-` and the second `-` of `--dry-run` are not
+ * boundaries; and a camel-case hump, both `aB` and `ABc`, so
+ * `RestrictSUIDSGID` splits once and not five times. The pipe is there for the
+ * option lists this corpus writes as keys (`-card-theme <dark|light|auto|both>`):
+ * without it the line broke before the closing `>` and left it alone.
+ */
+const KEY_BOUNDARY =
+	/(?<=[^\s._\-:=/,;@|][._\-:=/,;@|])|(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])/g;
+
+/**
+ * A run of `-` that BEGINS a word, with the character after it. The leading
+ * `-` of a flag is the first character of its name and not a boundary, but it
+ * is a hyphen, and a hyphen is a break opportunity of its own: line breaking
+ * is greedy, so `ghchronicle -config config.yaml -once` broke after that
+ * hyphen rather than at the space in front of it and read
+ * `... config.yaml -` / `once`. Held together, the greedy fill falls back to
+ * the space and the flag arrives whole.
+ */
+const LEADING_DASH = /(^|\s)(-+\S)/g;
+
+/** Every `code` element at or under a node, in document order. */
+function codeElements(node, found = []) {
+	if (node.type === "element" && node.tagName === "code") found.push(node);
+	for (const child of node.children ?? []) codeElements(child, found);
+	return found;
+}
+
+/**
+ * Writes a `wbr` at every boundary of the text under a node, so that a name
+ * too wide for its card breaks where a reader would break it rather than
+ * wherever `overflow-wrap: anywhere` runs out of room. See "Where a name may
+ * break" above.
+ *
+ * @param {any} node
+ */
+function breakAtBoundaries(node) {
+	if (!Array.isArray(node.children)) return;
+	node.children = node.children.flatMap((child) => {
+		if (child.type === "element") {
+			breakAtBoundaries(child);
+			return [child];
+		}
+		if (child.type !== "text") return [child];
+		return child.value
+			.split(KEY_BOUNDARY)
+			.filter(Boolean)
+			.flatMap((piece, at) => [
+				...(at === 0
+					? []
+					: [
+							{
+								type: "element",
+								tagName: "wbr",
+								properties: {},
+								children: [],
+							},
+						]),
+				...holdLeadingDashes(piece),
+			]);
+	});
+}
+
+/**
+ * One piece of a key's text as hast, with every word-initial run of `-` and
+ * the character after it wrapped so that no line can break between them. See
+ * `LEADING_DASH`.
+ *
+ * @param {string} piece
+ * @returns {any[]}
+ */
+function holdLeadingDashes(piece) {
+	const nodes = [];
+	let taken = 0;
+	for (const match of piece.matchAll(LEADING_DASH)) {
+		const start = match.index + match[1].length;
+		if (start > taken)
+			nodes.push({ type: "text", value: piece.slice(taken, start) });
+		nodes.push({
+			type: "element",
+			tagName: "span",
+			properties: { "data-join": "" },
+			children: [{ type: "text", value: match[2] }],
+		});
+		taken = start + match[2].length;
+	}
+	if (taken < piece.length) {
+		nodes.push({ type: "text", value: piece.slice(taken) });
+	}
+	return nodes;
+}
+
+/**
+ * Marks every first cell that is the row's NAME with `data-role="identity"`,
+ * which is what styles/tables.css sizes as the stacked card's title. See "The
+ * row's name" above for the three cases this does not mark.
+ *
+ * @param {any} table
+ */
+function markIdentities(table) {
+	const cells = firstCells(table);
+	const names = cells.map((cell) => textOf(cell).trim());
+	if (new Set(names).size !== names.length) return;
+	for (const cell of cells) {
+		if (!hasCode(cell)) continue;
+		cell.properties["data-role"] = "identity";
+		// Break opportunities go only to a cell that IS one name. A cell that
+		// holds several (install/systemd.mdx's "ProtectKernelTunables,
+		// ProtectKernelModules, ..." is eight code spans and seven commas)
+		// already breaks between them, and line breaking is greedy: given an
+		// opportunity inside the last name that fits, it takes it, and the
+		// reader gets `Protect` and `Hostname` as two pills on two lines where
+		// before the whole name moved down together. Measured on that cell at
+		// a 360 px viewport: six names split that way, none of which had to.
+		const spans = codeElements(cell);
+		if (spans.length === 1 && textOf(cell).trim() === textOf(spans[0]).trim()) {
+			breakAtBoundaries(spans[0]);
+		}
+	}
+}
+
+/**
+ * Marks the cell at `columnIndex` of every body row whose default is a value
+ * with `data-role="default"`, so styles/tables.css can grid-place it beside
+ * the first cell's label whatever DOM position it started at. A cell holding a
+ * sentence is left alone: unlabelled in the corner of a card it stops reading
+ * as a default (see "Default columns" above).
+ *
+ * @param {any} table
+ * @param {number} columnIndex
+ * @returns {number} how many cells were marked
+ */
+function markDefaultColumn(table, columnIndex) {
+	let hoisted = 0;
+	for (const group of childrenNamed(table, ROW_GROUPS)) {
+		if (group.tagName === "thead") continue;
+		for (const row of childrenNamed(group, ROWS)) {
+			const cell = childrenNamed(row, CELLS)[columnIndex];
+			if (!cell || !isValue(cell)) continue;
+			cell.properties["data-role"] = "default";
+			hoisted += 1;
+		}
+	}
+	return hoisted;
+}
+
 export default function rehypeTables() {
 	/**
 	 * @param {any} node
-	 * @param {{ label: string, indexes: Set<string>, found: Set<string> }} page
+	 * @param {{
+	 *   label: string,
+	 *   indexes: Set<string>,
+	 *   found: Set<string>,
+	 *   defaults: Map<string, string>,
+	 *   defaultsFound: Set<string>,
+	 *   plain: Set<string>,
+	 *   plainFound: Set<string>,
+	 *   path: string,
+	 * }} page
 	 */
 	const walk = (node, page) => {
 		if (!node || !Array.isArray(node.children)) return;
@@ -200,13 +531,61 @@ export default function rehypeTables() {
 			prepare(child, columns);
 			const index = columns.length > 0 && page.indexes.has(columns[0]);
 			if (index) page.found.add(columns[0]);
+			const plain = columns.length > 0 && page.plain.has(columns[0]);
+			if (plain) page.plainFound.add(columns[0]);
+			else markIdentities(child);
+			const defaultHeading =
+				columns.length > 0 ? page.defaults.get(columns[0]) : undefined;
+			let defaultColumn = false;
+			if (defaultHeading !== undefined) {
+				if (index) {
+					throw new Error(
+						`${page.path}: "${columns[0]}" is named in both indexTables and ` +
+							"defaultColumns. A table cannot be both: the compact form " +
+							"already runs every column but the first inline.",
+					);
+				}
+				page.defaultsFound.add(columns[0]);
+				const columnIndex = columns.indexOf(defaultHeading);
+				if (columnIndex === -1) {
+					throw new Error(
+						`${page.path}: defaultColumns names "${defaultHeading}" as the ` +
+							`default column of the "${columns[0]}" table, and that table ` +
+							`has no column with that heading. Its columns are: ` +
+							`${columns.map((name) => `"${name}"`).join(", ")}.`,
+					);
+				}
+				if (columnIndex === 0) {
+					throw new Error(
+						`${page.path}: defaultColumns names "${defaultHeading}" as both ` +
+							"the table to treat and the column to hoist. The first cell " +
+							"is the row's name; hoisting it beside its own label would " +
+							"leave the card with nothing on the left.",
+					);
+				}
+				const hoisted = markDefaultColumn(child, columnIndex);
+				if (hoisted === 0) {
+					throw new Error(
+						`${page.path}: defaultColumns names "${defaultHeading}" as the ` +
+							`default column of the "${columns[0]}" table, and no row of ` +
+							"it holds a value: every cell of that column is a sentence, " +
+							"and a sentence keeps its own labelled block. Remove the " +
+							"entry, or write those defaults as values.",
+					);
+				}
+				defaultColumn = true;
+			}
 			return {
 				type: "element",
 				tagName: "div",
 				properties: {
 					className: ["table-scroll"],
 					"data-columns": String(columns.length),
-					...(index ? { "data-form": "index" } : {}),
+					...(index
+						? { "data-form": "index" }
+						: defaultColumn
+							? { "data-form": "default" }
+							: {}),
 					// Focusable, because a region that scrolls has to be
 					// reachable without a pointer. The role and the label are
 					// what make that focus stop announce itself.
@@ -222,16 +601,46 @@ export default function rehypeTables() {
 	// is present transitively, and depending on a transitive package is how a
 	// build breaks on a machine whose resolution differs.
 	return (tree, file) => {
+		const defaultEntries = defaultColumnsOf(file);
 		const page = {
 			label: REGION_LABEL[localeOfFile(file)],
 			indexes: new Set(indexTablesOf(file)),
 			found: new Set(),
+			defaults: new Map(
+				defaultEntries.map((entry) => [entry.table, entry.default]),
+			),
+			defaultsFound: new Set(),
+			plain: new Set(plainTablesOf(file)),
+			plainFound: new Set(),
+			path: file?.path ?? "a page",
 		};
 		walk(tree, page);
 		const missing = [...page.indexes].filter((name) => !page.found.has(name));
 		if (missing.length) {
 			throw new Error(
-				`${file?.path ?? "a page"}: indexTables names ${missing
+				`${page.path}: indexTables names ${missing
+					.map((name) => `"${name}"`)
+					.join(", ")}, and no table on the page has that first column. ` +
+					"Rename the entry to the table's first heading, or remove it.",
+			);
+		}
+		const missingDefaults = [...page.defaults.keys()].filter(
+			(name) => !page.defaultsFound.has(name),
+		);
+		if (missingDefaults.length) {
+			throw new Error(
+				`${page.path}: defaultColumns names ${missingDefaults
+					.map((name) => `"${name}"`)
+					.join(", ")}, and no table on the page has that first column. ` +
+					"Rename the entry to the table's first heading, or remove it.",
+			);
+		}
+		const missingPlain = [...page.plain].filter(
+			(name) => !page.plainFound.has(name),
+		);
+		if (missingPlain.length) {
+			throw new Error(
+				`${page.path}: plainTables names ${missingPlain
 					.map((name) => `"${name}"`)
 					.join(", ")}, and no table on the page has that first column. ` +
 					"Rename the entry to the table's first heading, or remove it.",
