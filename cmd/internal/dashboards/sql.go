@@ -79,10 +79,16 @@ func otherRows(ranked, label, value string, n int) string {
 // gh_repo is a snapshot rewritten every sweep, so summing it directly would
 // count each repository once per sweep. This keeps one row each.
 func latestPerRepo(fields []string) string {
+	return latestPerRepoWithin(fields, "$__timeFilter(time)")
+}
+
+// latestPerRepoWithin is the same with the window named, for the one caller
+// that must not take the page's: see repoFlagsJoin.
+func latestPerRepoWithin(fields []string, window string) string {
 	return fmt.Sprintf("SELECT repo, %s FROM ("+
 		"SELECT *, ROW_NUMBER() OVER (PARTITION BY repo ORDER BY time DESC) AS rn"+
-		" FROM gh_repo WHERE $__timeFilter(time) AND %s) x WHERE rn = 1",
-		strings.Join(fields, ", "), RF)
+		" FROM gh_repo WHERE %s AND %s) x WHERE rn = 1",
+		strings.Join(fields, ", "), window, RF)
 }
 
 // latestSumSQL is the sum of a snapshot field, one row per partition, newest
@@ -125,3 +131,52 @@ Published to a Grafana that has a Loki datasource, with
 ` + "`cmd/publish_dashboard -loki <datasource-uid>`" + `, this panel shows those lines
 instead of this note.
 `
+
+// ── The repository's own flags ──────────────────────────────────────────────
+
+// repoFlagsJoin hangs `fork` and `archived` on a table of something else,
+// under the alias `f`, matched on the repository name. `on` is the column of
+// the outer query the repository is named by.
+//
+// Only gh_repo carries either: both are tags there and no other measurement
+// has them at all. Reading them costs a join, which is why the panels that
+// need them are the two SQL dashboards and why the other three say instead
+// that they cannot.
+//
+// What they are for: with 59 repositories in the picker, 17 of them archived
+// and 22 of them forks of other people's projects, every "oldest", "stalest"
+// and "never" sort on the page was won by something nothing can be done to. A
+// workflow declared in an archived repository cannot run, by definition; a
+// pull request in one cannot be merged; a branch of a fork is upstream's
+// history and not the account's. Measured on 2026-09-17: the eight oldest open
+// pull requests were dependabot's in two archived repositories, every workflow
+// in "Workflows that never ran" was in an archived one, and 1,083 of the 1,208
+// branches in "Stale branches" were a fork's.
+// The lookup takes wholeHistory and never the page's range, which is the whole
+// difference between a fix and a fix that switches itself off. gh_repo is a
+// snapshot, so a repository's flags are only knowable where a sweep landed: on
+// a range holding none the join matches nothing, COALESCE reads every missing
+// flag as "not flagged", and all four panels quietly revert to listing what
+// nobody can act on. That is not a corner: measured on the production store on
+// 2026-09-17, gh_repo holds 59 rows at exactly one timestamp, so every range
+// that does not contain the last sweep has no flags at all, and which ranges
+// those are moves with the clock. The scan is free, which is what lets the
+// window be the unbounded one: one parquet file and 59 rows
+// (system.parquet_files, same day) against the forty thousand file limit the
+// other whole-history panels are measured against.
+func repoFlagsJoin(on string) string {
+	return " LEFT JOIN (" +
+		latestPerRepoWithin([]string{"fork", "archived"}, wholeHistory) +
+		") f ON f.repo = " + on
+}
+
+// The predicates that go with it.
+//
+// A LEFT JOIN answers NULL where the repository has no gh_repo row inside the
+// range, and a PostgreSQL tag column is the empty string where nothing was
+// written. Both read as "not flagged" here rather than as a row to drop: a
+// row whose repository is unknown is not one the reader can be told to ignore.
+const (
+	notArchived = "COALESCE(f.archived, 'false') <> 'true'"
+	notAFork    = "COALESCE(f.fork, 'false') <> 'true'"
+)

@@ -11,6 +11,29 @@ const (
 	lifetimeMostUsed        = "Most used"
 )
 
+// repositoriesCreatedDesc leads with the window the panel has rather than
+// explaining it in the middle, and is out here for the reason
+// everyRepositoryDesc is.
+const repositoriesCreatedDesc = "A trailing year at a time, whatever the row above is " +
+	"called: GitHub's contributions collection offers twelve months of them per sweep, so " +
+	"a fresh install sees one year here and the table reaches further back with every year " +
+	"the rows are kept. Each repository the account created, dated when it was created " +
+	"rather than when a sweep noticed it. Forks and private repositories are included, " +
+	"which is the point: those are exactly the ones a sweep with `include_forks` off never " +
+	"discovers. It names its own window rather than taking the dashboard's, so narrowing " +
+	"the range at the top of the page does not narrow this table."
+
+// everyRepositoryDesc is what the widest table on the dashboard says about
+// itself, out here rather than at its call site so that the function building
+// the section stays inside the maintainability the linter holds it to.
+const everyRepositoryDesc = "The whole life of each repository in one row: not what " +
+	"happened in the dashboard range, but everything there has ever been. " + forksIncluded +
+	" Sorted by commits, a fork of a busy project outranks anything the account wrote, " +
+	"370,296 commits against 3,385 on the account this was measured on, so the table " +
+	"opens with the account's own repositories first and the forks under them, both " +
+	"ranked by commits. The fork and archived flags are columns here rather than a " +
+	"filter, the title being what it is, and a click on either sorts by it."
+
 // ── Lifetime ────────────────────────────────────────────────────────────────
 
 // lifetime is the numbers that are true since the beginning, as one row each.
@@ -28,6 +51,10 @@ func lifetime(b *builder) []Panel {
 	// account's own first repository ninth. Filtering them out is not right
 	// either: the title says every repository, ever. So the two tags GitHub
 	// already gives are shown, and one click on either column sorts by them.
+	// The columns were not enough on their own: labeled or not, the first
+	// screen was still eight rows of somebody else's project. The table now
+	// opens sorted by Fork and then by commits, which puts the account's own
+	// work first and still lists every repository (see sort_leading).
 	// Third and fourth, not last: the sorted column has to stay beside the
 	// first for the phone, so Commits keeps second place and the two flags
 	// take the next two. At 430 pixels that is Repository, Commits and Fork
@@ -169,18 +196,25 @@ func lifetime(b *builder) []Panel {
 				}, []string{
 					"owner", "full_name", "visibility", "instance", "job", "__name__",
 				}, map[string]int{"repo": 0, panelValueA: 1, "fork": 2, "archived": 3}),
-				Opts: Opts{"sort": "Commits"},
-				Desc: "The whole life of each repository in one row: not what happened in the " +
-					"dashboard range, but everything there has ever been. " + forksIncluded +
-					" Sorted by commits, a fork of a busy project outranks anything the " +
-					"account wrote, so the fork and archived flags are columns here and a " +
-					"click on either sorts by it.",
+				Opts: Opts{"sort": "Commits", "sort_leading": "Fork"},
+				Desc: everyRepositoryDesc,
 				Overrides: []any{
 					linkOn("Repository"), width("Fork", 70), width("Archived", 90),
 				},
 				GR: reposGR, GRTF: reposGRtf, GRDesc: grSlot,
 				ES: reposES, ESTF: reposEStf,
 			}),
+		// The description leads with the window rather than explaining it in
+		// the middle. The row above this says Lifetime and the panel beside it
+		// genuinely reaches back nine years, so on the account this was read
+		// against, where the contributions collection had given 38 of 59
+		// repositories and none older than 2025-12-14, a reader concluded
+		// nothing had been created before December. The title is not where the
+		// window can go, and length is not the reason: twenty-nine characters
+		// fit on a phone (TestTitlesFitAPhone) and "Repositories created (1y)"
+		// is twenty-five. It is that any title naming a window stops being
+		// true, this table gaining a year for every year the rows are kept, and
+		// a title that ages is worse than one that says less.
 		panel("table", "Repositories created", box{W: 8, H: 8, X: 0, Y: 17}, []Target{sqlT(created)}, &P{
 			// The exporter reduces this measurement to a count, so the answer
 			// here is a real one and it is a smaller one. Said rather than
@@ -195,14 +229,7 @@ func lifetime(b *builder) []Panel {
 				"them were forks, and can name none of them: the repository is not a " +
 				"label on that gauge. It is the last sweep's count, so it is that one " +
 				"trailing year and never the years the other stores have kept.",
-			Desc: "Each repository the account created, dated when it was created rather than " +
-				"when a sweep noticed it. Forks and private repositories are included, " +
-				"which is the point: those are exactly the ones a sweep with " +
-				"`include_forks` off never discovers. The contributions collection offers " +
-				"one trailing year of them at a time, so a fresh install sees a year here " +
-				"and the table reaches further back with every year the rows are kept. It " +
-				"names its own window rather than taking the dashboard's, so narrowing " +
-				"the range at the top of the page does not narrow this table.",
+			Desc: repositoriesCreatedDesc,
 			Overrides: []any{
 				when("Created"), width("Fork", 70), width("Private", 80), linkOn("Repository"),
 			},
@@ -292,8 +319,8 @@ func collectorSection(b *builder) []Panel {
 	// of legend above an empty 243 pixel plot: over two years the mean share
 	// per weekly bucket rounds to zero and the axis topped out at 0.25 per
 	// cent. The three that are used are the panel. "Every bucket" beside it
-	// still lists all eleven with their Most used at 0, which is where the
-	// absence belongs.
+	// still lists every bucket the store holds a reading of, with their Most
+	// used at 0, which is where the absence belongs.
 	budget := "SELECT time, series, used FROM (" +
 		"SELECT time, resource AS series, used_ratio AS used," +
 		" MAX(used_ratio) OVER (PARTITION BY resource) AS ever FROM (" +
@@ -378,8 +405,8 @@ func collectorSection(b *builder) []Panel {
 					"watching, which are the ones with more than thirty requests in them: " +
 					"search has thirty a minute and would flatten the axis. A bucket this " +
 					"account never touched is left out of the chart entirely, since its flat " +
-					"zero was still a legend entry; \"Every bucket\" beside this lists all " +
-					"eleven, and a Most used of 0 is where that absence belongs. A reading " +
+					"zero was still a legend entry; \"Every bucket\" beside this lists every " +
+					"one of them, and a Most used of 0 is where that absence belongs. A reading " +
 					"taken at each sweep, so the curve starts the day the collector did. " +
 					bucketFollowsRange,
 				GR: []Target{grq(fmt.Sprintf("aliasByNode(keepLastValue(%s), %d)",
@@ -398,8 +425,8 @@ func collectorSection(b *builder) []Panel {
 				panelValueB: lifetimeLowestRemaining, panelValueC: lifetimeMostUsed,
 			}, nil, nil),
 			Opts: Opts{"sort": lifetimeMostUsed},
-			Desc: "Fifteen buckets, and the one that runs out first decides what a sweep " +
-				"can collect. Reading them costs nothing: GET /rate_limit is free.",
+			Desc: "Every budget GitHub reports, and the one that runs out first decides what " +
+				"a sweep can collect. Reading them costs nothing: GET /rate_limit is free.",
 			GR: bucketsGR, GRTF: bucketsGRtf, GRDesc: grSlot,
 			ES: bucketsES, ESTF: bucketsEStf,
 		}),

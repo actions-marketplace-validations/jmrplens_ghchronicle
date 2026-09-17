@@ -107,10 +107,14 @@ func TestNoTitleClaimsAPeriodTheBucketDoesNotKeep(t *testing.T) {
 // Prometheus or Graphite, which have no join; saying it is what every store
 // can do, and these are the panels whose title reads as the account's own
 // work.
+//
+// These three count. "Stale branches" was the fourth and is not any more: a
+// list of what to do next can leave the rows out instead of warning about
+// them, which the two SQL stores now do (TestTheListsOfWhatToDoNextLeaveOutTheUnactionable).
 func TestThePanelsForksDistortSaySo(t *testing.T) {
 	t.Parallel()
 	want := []string{
-		"Commits", "Commits by author", "Every repository, ever", "Stale branches",
+		"Commits", "Commits by author", "Every repository, ever",
 	}
 	seen := map[string]bool{}
 	b := &builder{}
@@ -259,6 +263,23 @@ func TestEveryWholeHistoryWindowIsOnTheList(t *testing.T) {
 	}
 }
 
+// flagsLookup is the join repoFlagsJoin writes. It carries the unbounded
+// window and is not the panel reading its own measurement from the beginning:
+// it reads the newest gh_repo row per repository, a snapshot of 59 rows in one
+// parquet file on the production store, while the panel's own rows still
+// follow the dashboard range. So it is taken out before a panel is judged,
+// and the rule above keeps meaning what it says. The reason it must be
+// unbounded at all is in repoFlagsJoin.
+//
+// One pattern for one lookup, deliberately. A second unbounded lookup gets its
+// own pattern here and its own entry in the file-limit accounting in bounds.go,
+// rather than this one widened to match both: a pattern loose enough to cover
+// two is loose enough to hide a panel that reads its whole measurement by
+// accident, which is the thing the rule above exists to catch.
+var flagsLookup = regexp.MustCompile(
+	`LEFT JOIN \(SELECT repo, fork, archived FROM .*?\) f ON f\.repo = \w+\.repo`,
+)
+
 // carriesWholeHistory says whether any store of a panel reads from the
 // beginning rather than over the dashboard range.
 func carriesWholeHistory(p Panel) bool {
@@ -267,10 +288,38 @@ func carriesWholeHistory(p Panel) bool {
 			continue
 		}
 		for i := range st.Q {
-			if strings.Contains(st.Q[i].SQL, wholeHistory) {
+			if strings.Contains(flagsLookup.ReplaceAllString(st.Q[i].SQL, ""), wholeHistory) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// TestTheRepositoryFlagsAreReadOutsideTheRange: the four lists of what to do
+// next leave out what nobody can act on by joining gh_repo, which is a
+// snapshot, so the flags are only knowable where a sweep landed. Bounded by
+// the page's range the join matched nothing outside one, every missing flag
+// read as "not flagged", and all four panels reverted to the behavior they
+// were changed to fix, with nothing on the screen to say so. Measured on the
+// production store on 2026-09-17: gh_repo holds 59 rows at a single timestamp,
+// so any range not containing the last sweep had no flags at all, and which
+// ranges those are moves with the clock.
+func TestTheRepositoryFlagsAreReadOutsideTheRange(t *testing.T) {
+	t.Parallel()
+	for _, store := range []string{"influxdb", "postgres"} {
+		panels := rendered(t, store)
+		for _, title := range theQueues {
+			sql := everySQL(t, mustPanel(t, panels, title))
+			lookup := flagsLookup.FindString(sql)
+			if lookup == "" {
+				t.Fatalf("%s %s no longer joins the repository's own flags: %s", store, title, sql)
+			}
+			if strings.Contains(lookup, "$__timeFilter") || strings.Contains(lookup, "__timeGroup") ||
+				!strings.Contains(lookup, "30 years") {
+				t.Errorf("%s %s reads the flags inside the dashboard range, so the exclusion "+
+					"turns itself off on a range holding no sweep: %s", store, title, lookup)
+			}
+		}
+	}
 }
