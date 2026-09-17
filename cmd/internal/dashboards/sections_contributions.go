@@ -58,11 +58,21 @@ func contributionTotals(b *builder) []Panel {
 	}
 	byHour := punchSQL("hour", "Hour", "1")
 	byDay := punchSQL("weekday", "Weekday", "2 DESC")
-	// The owner is stripped from the name: this is the one table with
-	// `owner/` in front of every repository, and on a phone the prefix was
-	// all that fit.
-	byRepo := `SELECT regexp_replace(repo, '^[^/]+/', '') AS "Repository", commits AS "Commits", url AS "Link" FROM (` +
-		"SELECT repo, commits, url, ROW_NUMBER() OVER (PARTITION BY repo ORDER BY time DESC) AS rn" +
+	// The short name is what this column shows, deliberately: it is the one
+	// table that lists third-party repositories beside your own, and on a
+	// phone an `owner/` prefix was all that fit. It used to strip the owner
+	// with a regular expression because `repo` held the full name here;
+	// `repo` is the short name on every measurement now, so the column is
+	// read rather than parsed, and the other four stores show the same short
+	// name instead of the full one they used to show.
+	//
+	// This is the one panel over a third-party measurement that does not name
+	// the repository in full, and the width is why. What the display cannot
+	// carry the row identity still must, since two owners can use one short
+	// name, so the window partitions by `full_name`: the newest row is picked
+	// per repository and not per name.
+	byRepo := `SELECT repo AS "Repository", commits AS "Commits", url AS "Link" FROM (` +
+		"SELECT repo, commits, url, ROW_NUMBER() OVER (PARTITION BY full_name ORDER BY time DESC) AS rn" +
 		" FROM gh_contribution_repo WHERE $__timeFilter(time) AND kind = 'commits') x WHERE rn = 1" +
 		" ORDER BY 2 DESC LIMIT 25"
 	totals := `SELECT commits AS "Commits", pull_requests AS "Pull requests",` +
@@ -125,11 +135,21 @@ func contributionTotals(b *builder) []Panel {
 		"{"+strings.Join(totalFields, ",")+"}"), 3), "Field", []col{{"lastNotNull", "Value"}})
 	totalsES, totalsEStf := b.esRaw("gh_contributions_total", 1, totalCols, nil)
 
+	// Grouped by the full name in these three, where the SQL twin shows the
+	// short one. In InfluxDB and PostgreSQL the display and the identity are
+	// two different columns, so the window can partition by `full_name` while
+	// the column shows `repo`. Here they are the same column: the key a series
+	// is grouped under is the label it prints. Grouped by `repo` these three
+	// would each fail differently on two owners sharing a short name, and
+	// silently: Prometheus adds the two repositories together, Elasticsearch
+	// buckets them as one and keeps a single metric, and Graphite prints two
+	// series under one identical label. Measured on a live store, this
+	// measurement already held 68 short names against 70 full ones.
 	byRepoGR, byRepoGRtf := gTbl(topRows(gp("gh_contribution_repo", "commits", "kind", "commits"),
-		25, gn("gh_contribution_repo", "repo")), "Repository", []col{{"lastNotNull", "Commits"}})
-	byRepoES, byRepoEStf := esTbl("gh_contribution_repo", []any{b.tm("repo", 25), b.tmURL()},
+		25, gn("gh_contribution_repo", "full_name")), "Repository", []col{{"lastNotNull", "Commits"}})
+	byRepoES, byRepoEStf := esTbl("gh_contribution_repo", []any{b.tm("full_name", 25), b.tmURL()},
 		[]any{b.mNewest("commits")},
-		[]named{{"repo.keyword", "Repository"}, {"url.keyword", "Link"}, {"commits", "Commits"}},
+		[]named{{panelFullNameField, "Repository"}, {"url.keyword", "Link"}, {"commits", "Commits"}},
 		[]string{"kind:commits"})
 
 	hourGR, hourGRtf, hourES, hourEStf := punch("hour", "Hour")
@@ -209,14 +229,24 @@ func contributionTotals(b *builder) []Panel {
 			ES: dayES, ESTF: dayEStf,
 		}),
 		panel("table", "Commits by repository", box{W: 6, H: 7, X: 18, Y: 19}, []Target{sqlT(byRepo)}, &P{
-			Prom:      []Target{promTbl(`topk(25, sum by (repo) (github_contribution_repo_commits{kind="commits"}))`)},
-			PromTF:    []any{organize(map[string]string{"repo": "Repository", "Value": "Commits"}, nil, nil)},
+			Prom:      []Target{promTbl(`topk(25, sum by (full_name) (github_contribution_repo_commits{kind="commits"}))`)},
+			PromTF:    []any{organize(map[string]string{"full_name": "Repository", "Value": "Commits"}, nil, nil)},
 			Opts:      Opts{"sort": "Commits"},
 			Overrides: []any{barCell("Commits", "short", 120), linkOn("Repository")},
 			Desc: "Commits this account made in each repository over the last year, as the " +
-				"profile counts them.",
+				"profile counts them. The rows include repositories this account does not " +
+				"own, so the name carries its owner in every store but this one, where the " +
+				"owner is dropped for width and the row is still identified by the whole " +
+				"name behind the column.",
 			GR: byRepoGR, GRTF: byRepoGRtf,
+			GRDesc: "Named in full here: a Graphite series is labeled by the node it is " +
+				"grouped under, so the owner cannot be dropped without merging two " +
+				"repositories that share a short name.",
 			ES: byRepoES, ESTF: byRepoEStf,
+			ESDesc: "Named in full here, for the reason Graphite gives: the terms bucket is " +
+				"both the grouping key and the label.",
+			PromDesc: "Named in full here, for the reason Graphite gives: the label summed " +
+				"by is the label shown.",
 		}),
 		panel("table", "Contributions by year", box{W: 24, H: 8, X: 0, Y: 26}, []Target{sqlT(
 			`SELECT year AS "Year", contributions AS "Contributions",` +
@@ -247,10 +277,11 @@ const yearsDesc = "Every year, backfilled at one GraphQL point per year, reachin
 // per repository per day, and the only surface that sees the private and
 // third-party repositories a per-repository sweep never touches.
 //
-// `repo` here is owner/name rather than the bare name every per-repository
-// measurement carries, so the $repo variable would match none of it: neither
-// panel takes a repository filter in any store, the way "Commits by
-// repository" above does not.
+// Neither panel takes a repository filter in any store, the way "Commits by
+// repository" above does not. `repo` is the bare name here like everywhere
+// else now, so the $repo variable would match it, but the variable is built
+// from gh_repo, which holds the repositories the sweep collects, and these
+// rows are here for the private and third-party ones it never sees.
 //
 // The rows converge. Every sweep rewrites the same day of the same repository
 // with the same tags, in Elasticsearch too, which derives a document id from
@@ -263,7 +294,10 @@ const yearsDesc = "Every year, backfilled at one GraphQL point per year, reachin
 // a query can undo.
 func commitsPerRepository(b *builder) []Panel {
 	dayRepo := "gh_contribution_day_repo"
-	perRepoDay := topSeries(dayRepo, "repo", "commits", "commits", "commits > 0")
+	// Named in full: these rows are third-party and private repositories as
+	// much as the account's own, and a bare name would stack two owners'
+	// repositories of the same name into one series.
+	perRepoDay := topSeries(dayRepo, "full_name", "commits", "commits", "commits > 0")
 	hidden := `SELECT CASE WHEN private = 'true' AND own = 'true' THEN 'Yours, private'` +
 		` WHEN private = 'true' THEN 'Somebody else''s, private'` +
 		` WHEN own = 'true' THEN 'Yours, public'` +
@@ -308,8 +342,8 @@ func commitsPerRepository(b *builder) []Panel {
 					"The repositories include the private and third-party ones, which " +
 					`"Commits by repository" lists too, undated and unflagged. ` + cap100 +
 					" " + bucketFollowsRange,
-				GR: []Target{grq(perBucket(gp(dayRepo, "commits"), gn(dayRepo, "repo")))},
-				ES: []Target{b.esDaily(dayRepo, b.mSum("commits"), "repo", "", nil, "")},
+				GR: []Target{grq(perBucket(gp(dayRepo, "commits"), gn(dayRepo, "full_name")))},
+				ES: []Target{b.esDaily(dayRepo, b.mSum("commits"), "full_name", "", nil, "")},
 			}),
 		panel("barchart", "Commits the profile hides", box{W: 8, H: 8, X: 16, Y: 34},
 			[]Target{sqlT(hidden)}, &P{

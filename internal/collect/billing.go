@@ -61,7 +61,11 @@ func (b Billing) Collect(ctx context.Context, c *ghapi.Client, now time.Time) ([
 				DiscountAmount float64 `json:"discountAmount"`
 				NetAmount      float64 `json:"netAmount"`
 				RepositoryName string  `json:"repositoryName"`
-				OrgName        string  `json:"organizationName"`
+				// Read, but never sent by this endpoint: see billingRepoTags.
+				// It is kept so that the day the organization form of the
+				// report is collected, the owner is already read from where
+				// GitHub puts it.
+				OrgName string `json:"organizationName"`
 			} `json:"usageItems"`
 		}
 		if _, _, err := c.GetJSON(ctx, path, &res, ""); err != nil {
@@ -101,18 +105,11 @@ func (b Billing) Collect(ctx context.Context, c *ghapi.Client, now time.Time) ([
 			day = day.UTC().Truncate(24 * time.Hour)
 			points = append(points, sink.Point{
 				Measurement: "gh_billing_usage",
-				Tags: map[string]string{
-					"user": b.Login, "product": u.Product, "sku": u.SKU,
-					// Both are absent on a charge that belongs to no
-					// repository and on a personal account with no
-					// organization: measured on 2026-09-10, `org` was empty on
-					// all 937 rows of this account and `repo` on the three
-					// Copilot credit rows. An empty tag value is dropped on
-					// the way into InfluxDB, which would split this
-					// measurement into three series with three tag sets.
-					"unit": u.UnitType,
-					"repo": orNone(u.RepositoryName), "org": orNone(u.OrgName),
-				},
+				Tags: merge(billingRepoTags(b.Login, u.OrgName, u.RepositoryName),
+					map[string]string{
+						"user": b.Login, "product": u.Product, "sku": u.SKU,
+						"unit": u.UnitType,
+					}),
 				Fields: map[string]any{
 					"quantity": u.Quantity, "price_per_unit": u.PricePerUnit,
 					"gross": u.GrossAmount, "discount": u.DiscountAmount, "net": u.NetAmount,
@@ -125,4 +122,34 @@ func (b Billing) Collect(ctx context.Context, c *ghapi.Client, now time.Time) ([
 		}
 	}
 	return points, nil
+}
+
+// billingRepoTags names the repository a charge belongs to, in the one shape
+// every other measurement names one in.
+//
+// The `org` tag this replaces was the same dimension as `owner`, recorded
+// where it could never arrive. `organizationName` is not a property of
+// /users/{login}/settings/billing/usage: it is absent from every row that
+// endpoint returns, absent rather than present and empty, and absent from that
+// path's published schema. It exists only on the organization form of the
+// report, /organizations/{org}/settings/billing/usage, where it is required
+// and names the organization whose report was asked for, which is the owner of
+// every repository in that report. So the tag could only ever carry the
+// sentinel, and a reader asking whose repository burned the minutes had no
+// answer at all. Folding it into `owner` loses nothing in either direction:
+// this endpoint bills the login, and the day the organization report is
+// collected the organization it names is the owner, which is where it goes.
+//
+// A charge that belongs to no repository names none of the three. Those rows
+// are the monthly Copilot credit, three of the 937 measured, and they are not
+// about a repository, so saying the account owns one would be an invention
+// rather than a fallback.
+func billingRepoTags(login, org, repo string) map[string]string {
+	if repo == "" {
+		return repoTags("", "")
+	}
+	if org != "" {
+		return repoTags(org, repo)
+	}
+	return repoTags(login, repo)
 }
