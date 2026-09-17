@@ -106,6 +106,30 @@ not remove them: raise `--query-file-limit` on the server, rewrite the affected
 tables, or move to InfluxDB 3 Enterprise, which compacts on its own and is free
 for home use.
 
+### What the written line counts
+
+`points` is what that sink took, not what it was handed. Every sink here drops
+something of its own inside the write: InfluxDB skips the measurements
+[`exclude`](https://jmrp.io/docs/ghchronicle/sinks/influxdb/#exclude) names, Loki keeps only the
+measurements it has an event rendering for and drops the rest, the SQL,
+Graphite, Telegraf, file and stdout sinks skip a point that renders no row or
+line, and the two exporters skip a measurement they have no rule for. A third
+key appears when that happened:
+
+```text
+level=INFO msg=written sink=loki family=repos points=0 unchanged=0 filtered=42
+```
+
+`filtered` is what the sink did not write, and each sweep ends with one line
+per sink carrying the total since the run started, the way the ledger's own
+total beside it reads. Lines a store refused to parse are not counted as
+written either; they get a warning line of their own.
+
+Until this was counted the line said what the runner had handed over, so a
+sweep read `points=440` for a measurement InfluxDB excludes by default and has
+never held a row of, and reading Loki's lines told you nothing about what Loki
+stored.
+
 ### Start here
 
 - [You want the history](https://jmrp.io/docs/ghchronicle/sinks/influxdb/): InfluxDB is the reference implementation and the dashboard is built against it. PostgreSQL, Graphite and Elasticsearch keep the same facts in their own shapes.
@@ -216,6 +240,19 @@ Names measurements this sink should not receive. It defaults to `gh_job_log`,
 which is text meant for a log store: writing thousands of lines of build output
 into a metrics database is a lot of storage for something nobody will query as
 a number.
+
+An excluded measurement is still collected and still offered to this sink, so
+the sweep log says what the database took rather than what it was handed:
+
+```text
+level=INFO msg=written sink=influxdb family=joblogs points=0 unchanged=0 filtered=440
+```
+
+`filtered` here is a measurement named above, or a point carrying no field the
+line protocol can render. It is [the same key every sink
+uses](https://jmrp.io/docs/ghchronicle/sinks/#what-the-written-line-counts). Until this was counted
+the line read `points=440` for a measurement the database has never held a row
+of.
 
 ### Column types are fixed on first sight
 
@@ -855,6 +892,13 @@ every dated measurement now has to appear in one of two tables in
 `internal/sink/loki.go`, the renderings or the refusals, and each refusal
 carries the reason it is not a log line. A test fails on a dated measurement
 that appears in neither.
+
+It is not dropped in silence in the sweep log any more. This sink writes a
+fraction of what it is offered, so most of its lines carry
+[`filtered`](https://jmrp.io/docs/ghchronicle/sinks/#what-the-written-line-counts) and `points=0`,
+which is what it stored rather than what it was given. An entry older than
+`max_age`, or too far behind the newest entry of its own stream for Loki to
+accept, is counted there too and reported as a dropped-entries line.
 
 ### The line format
 

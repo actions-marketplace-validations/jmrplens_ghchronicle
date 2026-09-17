@@ -97,10 +97,11 @@ son instantáneas de una ventana sin fecha propia; se sellan al inicio del día
 UTC para que las pasadas de un día reescriban una fila, y el dashboard toma la más
 reciente y no la suma.
 
-**La mediana de tiempo hasta la primera revisión dice No data.** El panel lee
+**La mediana de tiempo hasta la revisión de otra persona dice No data.** El panel lee
 `seconds_to_first_human_review`, que deja fuera a los bots de revisión y las
 respuestas del propio autor; en una cuenta donde nadie más revisa, ninguna pull
-request lo lleva y la tarjeta está honestamente vacía. La velocidad de los bots
+request lo lleva y la tarjeta está honestamente vacía. No significa que no se
+haya revisado nada. La velocidad de los bots
 está en la tabla Reviewers, donde cada uno va marcado como bot: medido, nueve
 de cada diez pull requests tuvieron una revisión de un bot en menos de un
 minuto.
@@ -114,10 +115,23 @@ personas.
 GitHub cuenta las pull requests como issues dentro. La medida `gh_issue` es la
 que cuenta issues.
 
-**El almacenamiento de artefactos parece pequeño.** Compara el campo `walked`
-con `count` en `gh_artifact_total`. Cuando no coinciden, el tamaño vivo es un
-suelo: el repositorio tiene más artefactos de los que recorrió el tope de
-páginas.
+**El almacenamiento de artefactos parece pequeño.** Compara `walked` con `count`
+en `gh_artifact_total`. Cuando no coinciden, el tamaño vivo es un suelo: el
+repositorio tiene más artefactos de los que recorrió el tope de páginas. También
+puede salir más pequeño de lo esperado por una segunda razón: `count` es el
+total de GitHub e incluye los artefactos que ya ha caducado, mientras que el
+tamaño es solo sobre los vivos, que son los que cuenta `live_count`.
+
+**Un panel responde con un error de esquema en vez de decir No data.** InfluxDB 3
+crea una columna la primera vez que una fila la trae, así que una consulta que
+nombra una que ninguna fila ha escrito falla al planificarse. Una versión que
+añade un campo le hace eso a una base ya existente hasta que la familia que lo
+escribe hace una pasada: `gh_fork.seconds_to_push` y
+`gh_artifact_total.live_count` son las dos que añade esta versión, que nombran
+los paneles Forks y "Artifact storage counted", y la familia `forks` corre cada
+doce horas. Espera esa pasada, fuerza una con `-once`, o publica los dashboards
+después. Las demás columnas que pueden faltar están en
+[Columnas que solo existen una vez escritas](/ghchronicle/es/collectors/measurements/#columnas-que-solo-existen-una-vez-escritas).
 
 **La gráfica de tráfico solo llega catorce días atrás.** Eso es una primera
 pasada. La ventana se reescribe día a día en cada pasada, así que la serie se

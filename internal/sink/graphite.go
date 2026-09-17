@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -66,10 +67,38 @@ func (g *Graphite) Close() error {
 	return err
 }
 
-func (g *Graphite) Write(ctx context.Context, points []Point) error {
-	var lines []string
+// Write sends one metric per numeric field. A point whose fields are all
+// strings, or all shadowed by a tag of the same name, produces no line at all
+// and is not counted as written; the count is points, not lines, since a point
+// here is several metrics.
+func (g *Graphite) Write(ctx context.Context, points []Point) (int, error) {
+	lines, ends := g.render(points)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for start := 0; start < len(lines); start += g.Batch {
+		end := min(start+g.Batch, len(lines))
+		if err := g.send(ctx, strings.Join(lines[start:end], "")); err != nil {
+			// Every line before this batch went out, so what landed is every
+			// point whose last line did. A point split across the failed
+			// batch did not land whole and is not counted.
+			return pointsSentBefore(ends, start), err
+		}
+	}
+	return len(ends), nil
+}
+
+// render turns the batch into lines and says where each point's lines end,
+// for the points that rendered any.
+//
+// The ends are what let a write that fails partway be counted in points. A
+// point here is a variable number of lines, so the share of the lines that
+// went out is not the share of the points: one point rendering a thousand
+// lines and ninety nine rendering one apiece made that estimate answer ninety
+// where a single point had landed.
+func (g *Graphite) render(points []Point) (lines []string, ends []int) {
 	for _, p := range points {
 		stamp := stampOf(p).Unix()
+		before := len(lines)
 		for _, field := range sortedKeys(p.Fields) {
 			if _, clash := p.Tags[field]; clash {
 				continue // the same rule as the line protocol: the tag wins
@@ -80,16 +109,18 @@ func (g *Graphite) Write(ctx context.Context, points []Point) error {
 			}
 			lines = append(lines, fmt.Sprintf("%s %s %d\n", graphitePath(g.Prefix, p, field), formatFloat(v), stamp))
 		}
-	}
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	for start := 0; start < len(lines); start += g.Batch {
-		end := min(start+g.Batch, len(lines))
-		if err := g.send(ctx, strings.Join(lines[start:end], "")); err != nil {
-			return err
+		if len(lines) > before {
+			ends = append(ends, len(lines))
 		}
 	}
-	return nil
+	return lines, ends
+}
+
+// pointsSentBefore counts the points whose lines all fall before line `start`,
+// which is how many landed when the batch beginning there failed. `ends` rises,
+// so it is the position where start+1 would be inserted.
+func pointsSentBefore(ends []int, start int) int {
+	return sort.SearchInts(ends, start+1)
 }
 
 // send writes one payload, reconnecting once if the socket has gone.

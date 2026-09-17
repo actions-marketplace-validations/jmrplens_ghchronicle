@@ -10,6 +10,7 @@ const (
 	planningNewestRow    = ") x WHERE rn = 1"
 	planningPullRequests = "Pull requests"
 	planningPushedTo     = "Pushed to"
+	planningPushedAfter  = "Pushed after"
 )
 
 // ── Planning and community ──────────────────────────────────────────────────
@@ -38,8 +39,14 @@ func labelsMilestonesAndForks(b *builder) []Panel {
 		" FROM gh_milestone WHERE $__timeFilter(time) AND " + RF + planningNewestRow +
 		" ORDER BY 2 DESC LIMIT 25"
 	forks := topSeries("gh_fork", "repo", "1", "forks", RF)
+	// Idle is computed rather than stored: the row is dated when the fork was
+	// created and `seconds_to_push` says how long after that its last push
+	// came, so the time since that push is the row's own age less that. The
+	// collector used to store the idle days themselves, which meant one more
+	// day every day written back on to a row dated years ago.
+	forkIdle := `date_part('epoch', now() - time) - seconds_to_push AS "Idle"`
 	forkTbl := `SELECT by AS "By", time AS "Forked", repo AS "Repository",` +
-		` advanced AS "Pushed to", days_since_push AS "Idle",` +
+		` advanced AS "` + planningPushedTo + `", ` + forkIdle + `,` +
 		` url AS "Link"` +
 		" FROM gh_fork WHERE $__timeFilter(time) AND " + RF + " ORDER BY time DESC LIMIT 25"
 	// seconds_to_answer is a field only once a discussion has been answered:
@@ -76,14 +83,16 @@ func labelsMilestonesAndForks(b *builder) []Panel {
 			{"pull_requests", planningPullRequests},
 		}, []string{ESF})
 
-	forkGR, forkGRtf := gTbl(rowsOf(rp(fk, "days_since_push"), gn(fk, "by"), gn(fk, "repo")),
-		"By, repository", []col{{"lastNotNull", "Idle"}})
+	// Neither store can subtract the row's own date from now, so both show
+	// the static number instead: how long after the fork its last push came.
+	forkGR, forkGRtf := gTbl(rowsOf(rp(fk, "seconds_to_push"), gn(fk, "by"), gn(fk, "repo")),
+		"By, repository", []col{{"lastNotNull", planningPushedAfter}})
 	forkES, forkEStf := b.esRaw(fk, 25, []named{
 		{panelESTime, "Forked"},
 		{"by", "By"},
 		{"repo", "Repository"},
 		{"advanced", planningPushedTo},
-		{"days_since_push", "Idle"},
+		{"seconds_to_push", planningPushedAfter},
 		{"url", "Link"},
 	}, []string{ESF})
 	return []Panel{
@@ -157,28 +166,46 @@ func labelsMilestonesAndForks(b *builder) []Panel {
 			Prom: []Target{
 				promTbl(fmt.Sprintf("sum by (repo) (increase(github_forks_seen_total{%s}[$__range]))", PF), "A"),
 				promTbl(fmt.Sprintf("avg by (repo) (github_forks_seen_advanced_mean{%s})", PF), "B"),
-				promTbl(fmt.Sprintf("avg by (repo) (github_forks_seen_days_since_push_mean{%s})", PF), "C"),
+				promTbl(fmt.Sprintf("avg by (repo) (github_forks_seen_seconds_to_push_mean{%s})", PF), "C"),
 			},
 			PromTF: merged(map[string]string{
 				"repo": "Repository", panelValueA: "Forks", panelValueB: planningPushedTo,
-				panelValueC: "Idle",
+				panelValueC: planningPushedAfter,
 			}, nil, nil),
 			Desc: "Whether a fork was ever pushed to separates a derivative from a bookmark, " +
-				"which most forks are.",
+				"which most forks are. Idle is the time since that push, counted from the " +
+				"row's own date, so it is right when the panel is drawn rather than when the " +
+				"last sweep ran.",
 			PromDesc: "Prometheus keeps no forker, so this is per repository: forks seen over " +
-				"the range, the share ever pushed to, and the mean idle time. " + sinceStart,
+				"the range, the share ever pushed to, and on average how long after the fork " +
+				"its last push came, which is negative for a fork nobody has pushed to at " +
+				"all: GitHub gives such a fork the parent's own last push, which usually " +
+				"predates it, and two thirds of the forks measured here are that. How long a " +
+				"fork has been idle is the row's own date " +
+				"subtracted from now, which only the two SQL stores can do. " + sinceStart,
 			Overrides: []any{
-				when("Forked"), width(planningPushedTo, 110), unitOf("Idle", "d", 90),
+				when("Forked"), width(planningPushedTo, 110), unitOf("Idle", "s", 90),
 				linkOn("By"),
 			},
 			PromOver: []any{
 				unitOf(planningPushedTo, "percentunit", 110),
 				barCell("Forks", "short", 120),
+				unitOf(planningPushedAfter, "s", 110),
 			},
-			GR: forkGR, GRTF: forkGRtf,
+			GROver: []any{unitOf(planningPushedAfter, "s", 110)},
+			ESOver: []any{unitOf(planningPushedAfter, "s", 110)},
+			GR:     forkGR, GRTF: forkGRtf,
 			GRDesc: "Graphite names each row forker and repository from the path, and a boolean " +
-				"is not a metric there, so whether it was pushed to is missing. " + grRows,
+				"is not a metric there, so whether it was pushed to is missing. It cannot " +
+				"subtract the row's own date from now either, so the column is how long " +
+				"after the fork its last push came, which is negative for a fork nobody has " +
+				"pushed to: those inherit the parent's last push. " + grRows,
 			ES: forkES, ESTF: forkEStf,
+			ESDesc: "Elasticsearch lists the documents themselves and cannot subtract the " +
+				"row's own date from now, so the column is how long after the fork its last " +
+				"push came. A negative is a fork nobody has pushed to, which inherits the " +
+				"parent's own last push and is most of them; Pushed to says the same thing " +
+				"as a word.",
 		}),
 	}
 }

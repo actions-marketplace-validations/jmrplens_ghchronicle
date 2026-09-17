@@ -683,6 +683,14 @@ func TestArtifactsWalkedVersusCount(t *testing.T) {
 	if fieldInt(t, total, "live_bytes") != 100*1000 {
 		t.Errorf("live_bytes = %v, only the unexpired half of 200 artifacts at 1000 bytes", total.Fields["live_bytes"])
 	}
+	// The size travels with the count it is the size of. Without it a panel
+	// reads a floor over 200 walked artifacts beside a declared 350 that
+	// counts the expired ones too, and nothing says the two are different
+	// denominators.
+	if fieldInt(t, total, "live_count") != 100 {
+		t.Errorf("live_count = %v, want the 100 unexpired artifacts live_bytes adds up", total.Fields["live_count"])
+	}
+
 	if !total.Time.Equal(testNow) {
 		t.Errorf("the total is current state and must be stamped now, got %s", total.Time)
 	}
@@ -703,6 +711,10 @@ func TestArtifactsShortPageEndsTheWalk(t *testing.T) {
 	total := only(t, points, "gh_artifact_total")[0]
 	if fieldInt(t, total, "count") != 2 || fieldInt(t, total, "walked") != 2 || fieldInt(t, total, "live_bytes") != 204800 {
 		t.Errorf("total = %v", total.Fields)
+	}
+	// Everything GitHub declared was walked, so the live figures are totals.
+	if fieldInt(t, total, "live_count") != 1 {
+		t.Errorf("total = %v, want the one live artifact", total.Fields)
 	}
 	live := find(t, points, "gh_artifact", map[string]string{"artifact": "coverage"})
 	checkArtifactDemotedTags(t, live)
@@ -773,6 +785,9 @@ func TestArtifactsDisabledStillWritesATotal(t *testing.T) {
 	total := only(t, points, "gh_artifact_total")[0]
 	if fieldInt(t, total, "count") != 0 || fieldInt(t, total, "walked") != 0 {
 		t.Errorf("total = %v", total.Fields)
+	}
+	if fieldInt(t, total, "live_count") != 0 {
+		t.Errorf("total = %v, want nothing live", total.Fields)
 	}
 }
 

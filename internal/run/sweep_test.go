@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -30,7 +31,7 @@ type captured struct {
 func (c *captured) Name() string { return c.name }
 func (c *captured) Close() error { return nil }
 
-func (c *captured) Write(_ context.Context, points []sink.Point) error {
+func (c *captured) Write(_ context.Context, points []sink.Point) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.measures == nil {
@@ -40,9 +41,9 @@ func (c *captured) Write(_ context.Context, points []sink.Point) error {
 		c.measures[p.Measurement]++
 	}
 	if c.fail != nil {
-		return c.fail()
+		return 0, c.fail()
 	}
-	return nil
+	return len(points), nil
 }
 
 // measured is how many points of measurement the sink received.
@@ -305,5 +306,180 @@ func TestServeSweepsUntilCanceled(t *testing.T) {
 		}
 	case <-time.After(30 * time.Second):
 		t.Fatal("Serve did not return after its context ended")
+	}
+}
+
+// excluding is a sink that writes only some of what it is offered and counts
+// the rest, which is what the InfluxDB sink does with its `exclude` list.
+type excluding struct {
+	captured
+	skip     string
+	filtered uint64
+}
+
+func (e *excluding) Write(ctx context.Context, points []sink.Point) (int, error) {
+	var kept []sink.Point
+	for _, p := range points {
+		if p.Measurement == e.skip {
+			e.filtered++
+			continue
+		}
+		kept = append(kept, p)
+	}
+	return e.captured.Write(ctx, kept)
+}
+
+func (e *excluding) Filtered() uint64 { return e.filtered }
+
+// TestASinkThatDropsPointsIsNotCreditedWithWritingThem is the log line the
+// review of 2026-09-17 was misled by: production read
+// "sink=influxdb family=joblogs points=440 unchanged=0" for 440 points of
+// gh_job_log, which that sink excludes by default and which the database has
+// never held a row of. The count is what the store took.
+func TestASinkThatDropsPointsIsNotCreditedWithWritingThem(t *testing.T) {
+	t.Parallel()
+	skipping := &excluding{skip: "gh_job_log"}
+	skipping.name = "influxdb"
+	ledger := sink.LoadLedger(filepath.Join(t.TempDir(), "ledger.bin"), 0, 0)
+	r, _, log := fakeRunner(t, sink.OnlyChanged(skipping, ledger))
+	logLine := func(m string) sink.Point {
+		return sink.Point{
+			Measurement: m, Tags: map[string]string{"repo": "a"},
+			Fields: map[string]any{"lines": 1}, Time: time.Unix(1700000000, 0),
+		}
+	}
+	r.emit(t.Context(), "joblogs", []sink.Point{logLine("gh_job_log"), logLine("gh_workflow_job")})
+	if got := skipping.measured("gh_job_log"); got != 0 {
+		t.Fatalf("the sink wrote %d excluded points, so this test proves nothing", got)
+	}
+	want := `msg=written sink=influxdb family=joblogs points=1 unchanged=0 filtered=1`
+	if !strings.Contains(log.String(), want) {
+		t.Errorf("the log does not say\n%s\nin\n%s", want, log)
+	}
+	// And the sweep's own total, once, at the end.
+	r.finish()
+	if !strings.Contains(log.String(), `msg="points the sink did not write" sink=influxdb filtered=1`) {
+		t.Errorf("finish does not report what the sink dropped:\n%s", log)
+	}
+}
+
+// TestASinkThatWritesEverythingSaysNothingAboutFiltering keeps the key out of
+// every other line: a sweep writing five families to five stores would
+// otherwise carry a zero on every one of them.
+func TestASinkThatWritesEverythingSaysNothingAboutFiltering(t *testing.T) {
+	t.Parallel()
+	r, _, log := fakeRunner(t, &captured{name: "plain"})
+	r.emit(t.Context(), "stars", []sink.Point{{
+		Measurement: "gh_star", Tags: map[string]string{"repo": "a"},
+		Fields: map[string]any{"starred": 1}, Time: time.Unix(1700000000, 0),
+	}})
+	r.finish()
+	if strings.Contains(log.String(), "filtered=") {
+		t.Errorf("a sink that wrote everything reported filtering:\n%s", log)
+	}
+}
+
+// collector is a sink that keeps every point it is given, which is how the
+// clock test below compares two sweeps line by line.
+type collector struct {
+	mu     sync.Mutex
+	points []sink.Point
+}
+
+func (c *collector) Name() string { return "collector" }
+func (c *collector) Close() error { return nil }
+
+func (c *collector) Write(_ context.Context, points []sink.Point) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.points = append(c.points, points...)
+	return len(points), nil
+}
+
+// TestNoRowDatedInThePastMovesWithTheClock is the general form of the gate the
+// alert and fork collectors each carry: a row dated when the thing happened
+// must say the same thing whenever it is collected.
+//
+// A field computed from the sweep's clock and written on to such a row is
+// wrong twice. It is only true at the instant it was written, so a reader
+// asking about last week gets whatever the last sweep decided; and it changes
+// on every sweep, so every sweep rewrites a row dated in the past, which in
+// InfluxDB 3 leaves another parquet file in that old partition for ever.
+// Measured on 2026-09-17, two alert families and gh_fork were spending about
+// 260 files a day between them on nothing but the clock moving.
+//
+// This sweeps the whole fake account twice, three days apart, and compares
+// every row the two sweeps agree on the identity of. It is the version of the
+// fixture-scoped test in internal/collect that a new collector cannot slip
+// past: every family the fake answers is covered the moment it exists.
+func TestNoRowDatedInThePastMovesWithTheClock(t *testing.T) {
+	t.Parallel()
+	// A Monday, and three days is the Thursday of the same week: the weekly
+	// commit series is positional against the clock, fifty two entries ending
+	// at the current week, and a fake that answers the same array whatever the
+	// date would shift it a row if the two sweeps fell either side of a
+	// Sunday. That is the fixture standing still, not a collector reading the
+	// clock.
+	first := time.Date(2026, 9, 14, 9, 0, 0, 0, time.UTC)
+	sweep := func(at time.Time) []sink.Point {
+		got := &collector{}
+		r, _, log := fakeRunner(t, got)
+		r.Now = func() time.Time { return at }
+		if err := r.Once(t.Context()); err != nil {
+			t.Fatalf("sweep at %s: %v\n%s", at, err, log)
+		}
+		return got.points
+	}
+	// Rows dated at the current day or at the sweep itself are current state
+	// and are meant to move; everything before the start of the first sweep's
+	// day is history and is not.
+	history := first.UTC().Truncate(24 * time.Hour)
+	index := func(points []sink.Point) map[string]string {
+		out := map[string]string{}
+		for _, p := range points {
+			if !p.Time.Before(history) {
+				continue
+			}
+			line := sink.LineProtocol(p)
+			if line == "" {
+				continue
+			}
+			// The identity a store keys a row by, which is the line without
+			// its fields: two sweeps that write the same row must write the
+			// same values into it.
+			out[p.Measurement+"|"+fmt.Sprint(p.Tags)+"|"+p.Time.String()] = line
+		}
+		return out
+	}
+	before, after := index(sweep(first)), index(sweep(first.AddDate(0, 0, 3)))
+	shared := 0
+	for key, line := range before {
+		later, both := after[key]
+		if !both {
+			continue
+		}
+		shared++
+		if line != later {
+			t.Errorf("a row dated in the past moved with the clock:\n at the time %s\nthree days later %s",
+				line, later)
+		}
+	}
+	// A guard against the comparison quietly covering nothing, which is what
+	// a change to the fake or to the filter above would do first.
+	if shared < 100 {
+		t.Fatalf("only %d past-dated rows were written by both sweeps, so this checks almost nothing", shared)
+	}
+	// And the two sweeps must write the same set of past-dated rows, not just
+	// agree on the ones they share. A field taken from the clock keeps the
+	// row's identity and is caught above; its two neighbors move it and would
+	// otherwise fall out of the comparison unseen. A clock-derived tag forks
+	// the series as well as rewriting the partition, which is worse than the
+	// field form, and a rolling anchor such as now.AddDate(0, 0, -7) writes a
+	// past-dated row into a different old partition every sweep. Both show up
+	// here as a row one sweep wrote and the other did not.
+	if len(before) != shared || len(after) != shared {
+		t.Errorf("the two sweeps wrote %d and %d past-dated rows and agree on %d: "+
+			"a row whose identity moves with the clock is a tag or a timestamp taken from it",
+			len(before), len(after), shared)
 	}
 }
