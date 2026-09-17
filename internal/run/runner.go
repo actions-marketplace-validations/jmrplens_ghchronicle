@@ -100,6 +100,11 @@ type Runner struct {
 	// above: see refusalsFor.
 	refusals map[string]*collect.Refusals
 
+	// health is what this sweep has learned about its own collectors, which
+	// it writes as gh_collector_family on the way out. Per sweep: see
+	// health.go.
+	health health
+
 	// Now is the clock the sweep reads, for the one test that needs two of
 	// them. Nil is time.Now, which is what everything but that test uses.
 	Now func() time.Time
@@ -142,6 +147,24 @@ func (r *Runner) walk() collect.Walk {
 // generous.
 const discoverInterval = time.Hour
 
+// discoverFamily is the name the repository listing reports itself under on
+// the collector's own row when it fails.
+//
+// Not a family of the configuration and it cannot be one: nothing sets its
+// cadence and nothing may switch it off. It is on that row with them because
+// it is the one collector every family depends on: a sweep that cannot list
+// the repositories runs none of them, and without a row of its own the page
+// would show sixteen families that never ran and no reason for any of it.
+//
+// Only when it fails, which is the one place this measurement does not need
+// the row that always arrives. A listing that worked is already stated by
+// every other row of the sweep, since no family could have run without it, so
+// a heartbeat here would be one row every fifteen minutes saying what the
+// rows beside it already say. What was ambiguous is the sweep with no family
+// row at all, and that is exactly the case this fills in: nothing was due, or
+// the listing failed and here is why.
+const discoverFamily = "discover"
+
 // Once runs every family whose interval has elapsed.
 //
 // A family that fails is logged and skipped; the sweep continues. One
@@ -162,15 +185,32 @@ func (r *Runner) Once(ctx context.Context) error {
 		}
 		r.Log.Info(why)
 	}
-	if err := r.discoverRepos(ctx, now); err != nil {
-		return err
-	}
-	r.accountFamilies(ctx, now)
-	if err := r.repoFamilies(ctx, now); err != nil {
+	r.beginHealth()
+	err := r.sweep(ctx, now)
+	// On the way out whatever happened, and not only when the sweep reached
+	// the end of it. The rule this measurement is read by is that a family
+	// with no row did not run, so a sweep that listed its repositories, ran
+	// its account families and was then cut short by a discovery that failed
+	// or by a shutdown would leave that sentence saying something false about
+	// the families that did run. emitHealth detaches from this context for
+	// the shutdown half of that.
+	r.emitHealth(ctx, now)
+	if err != nil {
 		return err
 	}
 	r.finish()
 	return nil
+}
+
+// sweep is the collection itself: the repository list, the account-wide
+// families and then the per-repository ones. Separate from Once so that every
+// way it can end passes through the same place on the way out.
+func (r *Runner) sweep(ctx context.Context, now time.Time) error {
+	if err := r.discoverRepos(ctx, now); err != nil {
+		return err
+	}
+	r.accountFamilies(ctx, now)
+	return r.repoFamilies(ctx, now)
 }
 
 // clock is the instant a sweep dates itself by. It is the wall clock, and it
@@ -202,6 +242,8 @@ func (r *Runner) discoverRepos(ctx context.Context, now time.Time) error {
 		IncludePrivate:  r.Cfg.Targets.PrivateIncluded(),
 	})
 	if err != nil {
+		r.noteFamily(discoverFamily, 0, 1, 0)
+		r.noteFamilyFailure(discoverFamily, err)
 		return err
 	}
 	r.repos, r.archived, r.reposAt = found.Repos, found.Archived, now
@@ -351,6 +393,7 @@ func (r *Runner) repoFamilies(ctx context.Context, now time.Time) error {
 			return err
 		}
 		r.emit(ctx, family, points)
+		r.noteFamily(family, len(r.repos), failed, len(points))
 		// A family where every repository failed has not run. Marking it would
 		// hide the outage until its next cadence, which for the slow families
 		// is half a day.
@@ -386,25 +429,40 @@ func (r *Runner) collectFamily(ctx context.Context, family string, now time.Time
 	// GraphQL point. It is not a per-repository failure if it fails: the
 	// loop below still runs.
 	failed := 0
-	if batch, err := r.familyBatch(ctx, family, now); err != nil {
-		r.Log.Error("batched collector failed", "family", family, "err", err)
-		// Where the batch was the family, or the part of it these
-		// repositories were going to get, marking it as run would hide the
-		// outage until its next cadence, which for two of the three is a
-		// whole day. Counting them as failed is what repoFamilies already
-		// reads as "this family has not run".
-		failed = r.batched(family)
-	} else {
-		points = append(points, batch...)
+	batch, batchErr := r.familyBatch(ctx, family, now)
+	// Kept whichever way it went. A batched read covers fourteen
+	// repositories at a time and the collectors hand back every repository
+	// that answered beside the error, so the rows of the batches that
+	// succeeded are as true as if none had failed.
+	points = append(points, batch...)
+	if batchErr != nil {
+		r.Log.Error("batched collector failed", "family", family, "err", batchErr)
+		r.noteFamilyFailure(family, batchErr)
+		failed = batchFailures(batchAnswered(batch, batchErr), r.batched(family))
 	}
 	for _, repo := range r.repos {
 		// A shutdown cancels the sweep. Without this every remaining
 		// repository logs its own "context canceled" and the family is
 		// then marked as done, which is exactly backwards.
 		if ctx.Err() != nil {
-			return nil, failed, ctx.Err()
+			return points, failed, ctx.Err()
 		}
 		pts, err := r.repoFamily(ctx, family, repo, now)
+		// Before the error is looked at, because what a collector gathered
+		// before it failed is not made untrue by the call that failed after
+		// it. This line is the defect the store showed: measured on the
+		// author's own account on 2026-09-16, gh_workflow_run and
+		// gh_workflow_job held nothing at all for his five busiest
+		// repositories, each because one /repos/<repo>/actions/runs/<id>/jobs
+		// call had answered 502 once, and every run and job that repository's
+		// actions family had already collected was dropped with it. A retry
+		// would have helped that 502 and nothing else; keeping what was
+		// collected is right whatever failed, which is why it is this and not
+		// a retry. The repository is still counted as failed below: half a
+		// repository is not a repository that succeeded, and `failed` is what
+		// decides whether the family is marked as run and what the collector's
+		// own rows report.
+		points = append(points, pts...)
 		if err != nil {
 			if limited, ok := errors.AsType[*ghapi.RateLimitedError](err); ok {
 				// Not a failure of this repository: the budget ran out
@@ -412,19 +470,67 @@ func (r *Runner) collectFamily(ctx context.Context, family string, now time.Time
 				// the next sweep picks it up rather than skipping a day.
 				r.Log.Warn("budget spent mid-family", "family", family,
 					"at", repo.FullName, "resets", limited.Reset.Format(time.TimeOnly))
+				r.noteFamilyFailure(family, err)
 				return points, len(r.repos), nil
 			}
 			failed++
 			r.Log.Error("collector failed", "family", family, "repo", repo.FullName, "err", err)
+			r.noteRepoFailure(family, repo, err)
 			continue
 		}
-		points = append(points, pts...)
 		if !r.awaitBudget(ctx, family) {
 			r.Log.Warn("stopping this family here", "family", family, "at", repo.FullName)
 			break
 		}
 	}
 	return points, failed, nil
+}
+
+// batchFailures is what a failed batch counts as: how many repositories it
+// took with it, or one when some of them answered.
+//
+// The two are different questions and they used to be the same answer.
+// Where the batch is the whole family, or the part of it these repositories
+// were going to get, and no chunk of it answered, every repository it covered
+// is lost: repoFamilies reads failed == len(repos) as "this family has not
+// run" and leaves it unmarked, which is what stops an outage hiding until the
+// family's next cadence, a whole day for two of the three.
+//
+// A batch that failed and still answered for some repositories is the other
+// case, and counting it as every repository was a cost regression this branch
+// introduced by itself: the batched collectors now report a chunk they lost
+// instead of swallowing it, so a single repository failing its alias batch
+// marked all fifty-nine as failed, left the family unmarked, and turned a
+// daily family into a quarter-hourly one for as long as that repository stayed
+// broken. It counts as one thing that failed, which is what r.family already
+// counts an account-wide failure as and for the same reason: nothing in the
+// error names a repository, and the family delivered some of what it was asked
+// for. The failure is not lost by the family being marked; it is in the log
+// and in the family's own row, with the reason that says which kind it was.
+func batchFailures(answered bool, covered int) int {
+	if answered {
+		return 1
+	}
+	return covered
+}
+
+// batchAnswered reports whether the batched part of a family answered for any
+// repository at all.
+//
+// Rows are not the test, and reading them as one was a corner that survived
+// the first fix: a collector that legitimately writes nothing for a repository
+// with nothing to report produces zero points from chunks that all answered
+// perfectly. deployments is the live example, hourly, on an account that has
+// never deployed anything, so its batch yields no rows on every sweep and one
+// chunk failing would have left it due on every tick. The collectors say how
+// many repositories were in the chunks that answered, through
+// collect.PartialError, which is the question this is really asking.
+func batchAnswered(points []sink.Point, err error) bool {
+	if len(points) > 0 {
+		return true
+	}
+	partial, ok := errors.AsType[*collect.PartialError](err)
+	return ok && partial.Asked > 0
 }
 
 // finish saves what the sweep learned, unless it was a card-only sweep, which
@@ -779,9 +885,31 @@ func (r *Runner) family(ctx context.Context, name string, now time.Time, run fun
 	points, err := run()
 	if err != nil {
 		r.Log.Error("collector failed", "family", name, "err", err)
+	}
+	// Emitted whether or not it failed, for the reason collectFamily gives at
+	// length: several of these families read every repository in batches of
+	// fourteen, and the batches that answered answered.
+	r.emit(ctx, name, points)
+	// An account-wide family asks about no repository, so it fails as one
+	// thing or not at all.
+	failed := 0
+	if err != nil {
+		failed = 1
+		r.noteFamilyFailure(name, err)
+	}
+	r.noteFamily(name, 0, failed, len(points))
+	if err != nil && len(points) == 0 {
+		// Nothing at all came back, so the family has not run. Marking it
+		// would hide the outage until its next cadence, which for the twelve
+		// hour families is half a day.
 		return
 	}
-	r.emit(ctx, name, points)
+	// Marked although some of it failed, which is the rule repoFamilies
+	// already follows for a family that failed on some of its repositories
+	// and not on all of them: a batch that lost one repository must not cost
+	// a whole family's pass on every sweep until it comes back. The failure
+	// is not lost by being marked; it is in the log and in the collector's own
+	// rows, which is where it was missing.
 	r.State.Mark(name, now)
 }
 
