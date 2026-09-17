@@ -2,12 +2,16 @@ package ghchronicle
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/jmrplens/ghchronicle/internal/config"
 )
@@ -92,6 +96,10 @@ func writeGHChronicleStub(t *testing.T) (pathDir, record string) {
 // reads.
 type runInputs struct {
 	mode, since, card, layout, theme, fields, motion string
+	// width is the card-width input, as the workflow author typed it. Empty
+	// and "0" both mean the layout's own width, and neither reaches the
+	// binary: an older pinned release would not know the flag.
+	width string
 }
 
 // runActionRunScript runs scripts/action-run.sh with a stand-in ghchronicle
@@ -125,6 +133,7 @@ func runActionRunScript(t *testing.T, in runInputs, configPath, dir string) (sta
 		"THEME="+in.theme,
 		"FIELDS="+in.fields,
 		"MOTION="+in.motion,
+		"WIDTH="+in.width,
 	)
 	out, _ := cmd.CombinedOutput()
 	return cmd.ProcessState.ExitCode(), string(out), record
@@ -247,6 +256,24 @@ func TestTheActionsRunStepBuildsTheRightCommandLineForEachMode(t *testing.T) {
 			name:     "card-theme both is passed through",
 			in:       runInputs{mode: "card", card: "CARD", layout: "summary", theme: "both", motion: "once"},
 			wantArgs: []string{"-config", "CONFIG", "-card", "CARD", "-card-layout", "summary", "-card-theme", "both", "-card-only"},
+		},
+		{
+			name:     "card-width is passed through when given",
+			in:       runInputs{mode: "card", card: "CARD", layout: "activity-heatmap", theme: "auto", motion: "once", width: "900"},
+			wantArgs: []string{"-config", "CONFIG", "-card", "CARD", "-card-layout", "activity-heatmap", "-card-theme", "auto", "-card-width", "900", "-card-only"},
+		},
+		{
+			// Empty and zero are the same answer, the layout's own width, and
+			// neither may reach the binary: a workflow that pins `version` to
+			// a release from before the flag existed would stop running.
+			name:     "card-width is left out when empty",
+			in:       runInputs{mode: "card", card: "CARD", layout: "summary", theme: "auto", motion: "once"},
+			wantArgs: []string{"-config", "CONFIG", "-card", "CARD", "-card-layout", "summary", "-card-theme", "auto", "-card-only"},
+		},
+		{
+			name:     "card-width is left out when it is zero",
+			in:       runInputs{mode: "card", card: "CARD", layout: "summary", theme: "auto", motion: "once", width: "0"},
+			wantArgs: []string{"-config", "CONFIG", "-card", "CARD", "-card-layout", "summary", "-card-theme", "auto", "-card-only"},
 		},
 		{
 			// mkdir -p -- "$(dirname -- "$CARD")" carries both "--"s
@@ -510,4 +537,73 @@ func readRecord(t *testing.T, path string) string {
 		t.Fatalf("the stand-in ghchronicle never ran: %v", err)
 	}
 	return string(body)
+}
+
+// TestTheCardWidthInputNamesNoWidth holds the Action's most public piece of
+// prose to the one rule that keeps it true: it may say where the widths are,
+// and it may not say what they are.
+//
+// This description is what GitHub renders on the Marketplace listing and in the
+// Action's own input documentation, so it is what a workflow author reads
+// immediately before typing a number. It said "between its own minimum and
+// 1200" and "the whole year at about 900" for two commits after the widths had
+// moved: activity-heatmap's far end became 891, which made 900 a width the
+// binary refuses and the recommendation a failed workflow. Nothing noticed,
+// because cmd/gen_config exports only an input's name, required and default,
+// so no generated file carries this sentence and no check compares it.
+//
+// A width belongs to a layout and lives in internal/render's registry, which
+// -card-layouts prints and the layouts page states per layout from the same
+// export. Written here it is a copy, and a copy of a number that nothing
+// regenerates is a number waiting to go stale. So: no run of two or more
+// digits. A single digit still passes, which is what lets the sentence say
+// that 0 means the layout's own width.
+//
+// Digits are not the only way to write a number, and the spelled form is not
+// hypothetical here: the comment above heatGridWeeks went stale as "about nine
+// hundred units", in this same repository, in this same change. A rule that
+// caught the shape that just went wrong and missed the one beside it would be
+// the weaker half of a gate, so the magnitudes are refused too.
+func TestTheCardWidthInputNamesNoWidth(t *testing.T) {
+	description := actionInputDescription(t, "card-width")
+	written := regexp.MustCompile(`(?i)\d\d+|hundred|thousand`)
+	if found := written.FindAllString(description, -1); found != nil {
+		t.Errorf("the card-width input names the width(s) %v. A width belongs to a layout, "+
+			"and every layout's two ends are printed by -card-layouts and stated in its own "+
+			"section of the layouts page, both from internal/render. Point at those instead "+
+			"of copying a number nothing regenerates:\n%s", found, description)
+	}
+	// Prohibiting the number is only half a rule: the sentence has to leave a
+	// reader somewhere to find it.
+	if !strings.Contains(description, "-card-layouts") {
+		t.Errorf("the card-width input names no width, which is right, and points the reader "+
+			"at nothing that does. Name -card-layouts:\n%s", description)
+	}
+}
+
+// actionInputDescription is one input's description, read out of action.yml the
+// way cmd/gen_config reads the rest of the input, and failing the test when the
+// Action does not declare it.
+func actionInputDescription(t *testing.T, name string) string {
+	t.Helper()
+	raw, err := os.ReadFile("action.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Inputs map[string]struct {
+			Description string `yaml:"description"`
+		} `yaml:"inputs"`
+	}
+	if err = yaml.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("action.yml: %v", err)
+	}
+	in, ok := doc.Inputs[name]
+	if !ok {
+		t.Fatalf("action.yml declares no %q input; it has %v", name, slices.Sorted(maps.Keys(doc.Inputs)))
+	}
+	if strings.TrimSpace(in.Description) == "" {
+		t.Fatalf("action.yml declares %q with no description", name)
+	}
+	return in.Description
 }

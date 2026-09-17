@@ -107,6 +107,7 @@ type options struct {
 	layout   string
 	fields   string
 	motion   string
+	width    int
 	layouts  bool
 	cardOnly bool
 	groups   bool
@@ -140,6 +141,12 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 		"comma-separated fields the card shows; empty means the layout's default")
 	fs.StringVar(&o.motion, "card-motion", render.MotionOnce,
 		"how an animated layout moves: once, loop or off; a layout that does not move ignores it")
+	fs.IntVar(&o.width, "card-width", 0,
+		"card width in pixels; 0 draws the layout at its own width. Each layout draws between two ends of "+
+			"its own and refuses anything outside them, and -card-layouts states both. Only "+
+			"activity-heatmap turns the room into more data, one more week of the contribution calendar at "+
+			"a time until the year it holds is drawn, which is also where its far end is; every other "+
+			"layout spreads the same content wider. badge-row ignores it: its width follows its pills")
 	fs.BoolVar(&o.layouts, "card-layouts", false, "list the card layouts and their fields, then exit")
 	fs.BoolVar(&o.groups, "groups", false, "list the metric groups and the families in each, then exit")
 	fs.BoolVar(&o.cardOnly, "card-only", false, "with -card, write the SVG and nothing else")
@@ -313,9 +320,20 @@ func printOnly(o *options, stdout io.Writer) bool {
 func printLayouts(w io.Writer) {
 	for _, l := range render.Layouts() {
 		fmt.Fprintf(w, "%-18s %-10s %s\n", l.Name, l.Family, l.Description)
+		fmt.Fprintf(w, "%-18s %-10s %s\n", "", "", layoutWidth(l))
 		fmt.Fprintf(w, "%-18s %-10s default: %s\n", "", "", strings.Join(l.Fields, ", "))
 	}
 	fmt.Fprintln(w, "fields:", strings.Join(render.Fields(), ", "))
+}
+
+// layoutWidth is the width line -card-layouts prints under a layout, which is
+// what a reader needs before -card-width is any use to him: the width he gets
+// if he says nothing, and the two ends of what the layout accepts.
+func layoutWidth(l render.Layout) string {
+	if l.Width == 0 {
+		return "width: follows its content"
+	}
+	return fmt.Sprintf("width: %d, from %d to %d", l.Width, l.MinWidth, l.MaxWidth)
 }
 
 // printGroups lists the metric groups and the families in each, so the
@@ -546,7 +564,10 @@ func cardFiles(path, theme string) []cardFile {
 
 // cardOptions turns the command line into the renderer's options for one theme.
 func cardOptions(o *options, theme string) *render.Options {
-	return &render.Options{Theme: theme, Layout: o.layout, Motion: o.motion, Fields: splitFields(o.fields)}
+	return &render.Options{
+		Theme: theme, Layout: o.layout, Motion: o.motion,
+		Fields: splitFields(o.fields), Width: o.width,
+	}
 }
 
 func buildSinks(cfg *config.Config, log *slog.Logger, oneShot bool) ([]sink.Sink, error) {

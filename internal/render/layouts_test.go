@@ -471,23 +471,23 @@ func TestAnimatedCountersHonourReducedMotion(t *testing.T) {
 	}
 }
 
-// TestTheHeatmapWaveIsOneClassPerWeek pins the shape of the wave: twelve
-// beats and not eighty-four, the seven squares of a week sharing one, and the
-// key beside the grid left out of it, because it is a legend for the ramp and
-// not a week of the calendar.
+// TestTheHeatmapWaveIsOneClassPerWeek pins the shape of the wave: one beat per
+// week and not one per square, the seven squares of a week sharing one, and
+// the key beside the grid left out of it, because it is a legend for the ramp
+// and not a week of the calendar.
 func TestTheHeatmapWaveIsOneClassPerWeek(t *testing.T) {
 	doc := mustRender(t, sample(), &Options{Theme: "dark", Layout: "activity-heatmap"})
-	if got := strings.Count(doc, "@keyframes m"); got != heatWeeks {
-		t.Errorf("the grid animates %d classes, want one per week, %d", got, heatWeeks)
+	weeks := heatGridWeeks(defaultWidth, heatNumsWidth(heatNums()))
+	if got := strings.Count(doc, "@keyframes m"); got != weeks {
+		t.Errorf("the grid animates %d classes, want one per week, %d", got, weeks)
 	}
-	for w := range heatWeeks {
+	for w := range weeks {
 		cls := "m" + strconv.Itoa(w)
 		if got := len(regexp.MustCompile(`<rect class="h\d `+cls+`"`).FindAllString(doc, -1)); got != 7 {
 			t.Errorf("week %d is on %d squares, want the seven days of a week", w, got)
 		}
 	}
-	// The key is the five squares after the grid's eighty-four, and it stands
-	// still.
+	// The key is the five squares after the grid's own, and it stands still.
 	keys := regexp.MustCompile(`<rect class="h\d" `).FindAllString(doc, -1)
 	if len(keys) != 5 {
 		t.Errorf("%d squares carry a level and no week, want the five of the key", len(keys))
@@ -495,8 +495,183 @@ func TestTheHeatmapWaveIsOneClassPerWeek(t *testing.T) {
 	// Under off the squares are written exactly as they were before the wave
 	// existed: a level and nothing else.
 	still := mustRender(t, sample(), &Options{Theme: "dark", Layout: "activity-heatmap", Motion: MotionOff})
-	if n := len(regexp.MustCompile(`<rect class="h\d" `).FindAllString(still, -1)); n != heatWeeks*7+5 {
-		t.Errorf("under off %d squares carry a bare level, want %d", n, heatWeeks*7+5)
+	if n := len(regexp.MustCompile(`<rect class="h\d" `).FindAllString(still, -1)); n != weeks*7+5 {
+		t.Errorf("under off %d squares carry a bare level, want %d", n, weeks*7+5)
+	}
+}
+
+// heatNums is the numbers the activity-heatmap draws by default, taken from
+// the registry rather than typed out, because their column is what decides how
+// wide the grid beside them may be.
+func heatNums() []metric {
+	for _, l := range layouts {
+		if l.Name == "activity-heatmap" {
+			return heatNumbers(metricsOf(sample(), l.Fields))
+		}
+	}
+	return nil
+}
+
+// heatSlack is what a card of this field set leaves empty at this width: the
+// room between the grid's last square and the far padding, once the numbers
+// have taken their column. The drawing's own geometry, so a test of it is a
+// test of the card.
+func heatSlack(width, numsW float64) (weeks int, slack float64) {
+	weeks = heatGridWeeks(width, numsW)
+	gridW := float64(weeks)*heatPitch - (heatPitch - heatCell)
+	room := width - 2*ghPad
+	if numsW > 0 {
+		room -= heatNumsGap + numsW
+	}
+	return weeks, room - gridW
+}
+
+// TestTheHeatmapGridTakesEveryWeekItHasRoomAndDataFor is the invariant that
+// holds whatever the card was asked to show: the grid is never smaller than
+// the room allows unless it has already drawn the whole year, and it never
+// overruns the card. It sweeps every width the layout accepts, over the field
+// set it draws by default and over three narrower ones.
+//
+// The narrower sets are here because the layout's far end cannot know them.
+// heatFullWidth is where the year lands for the default card, and a card with
+// a shorter column of numbers reaches the year earlier: -card-fields sparkline
+// has no column at all, draws its year at 769 and leaves a hundred and
+// twenty-two units empty by 891. That is not a grid stopping short, which is
+// what this rewrite was about, it is a grid that has run out of calendar, and
+// the difference is exactly what the second clause below says. The stronger
+// claim, that there is no empty space at all, is true of the default card only
+// and is TestTheHeatmapFarEndIsWhereTheDefaultCardsYearLands.
+func TestTheHeatmapGridTakesEveryWeekItHasRoomAndDataFor(t *testing.T) {
+	def := mustLayout(t, "activity-heatmap")
+	for _, fields := range [][]string{
+		def.Fields,
+		{fieldSparkline, fieldStars, fieldForks, fieldRepos},
+		{fieldSparkline, fieldStars},
+		{fieldSparkline},
+	} {
+		numsW := heatNumsWidth(heatNumbers(metricsOf(sample(), fields)))
+		for width := def.MinWidth; width <= def.MaxWidth; width++ {
+			weeks, slack := heatSlack(float64(width), numsW)
+			if slack < 0 {
+				t.Fatalf("%v at width %d: %d weeks overrun the card by %v", fields, width, weeks, -slack)
+			}
+			if slack >= heatPitch && weeks != heatWeeksMax {
+				t.Fatalf("%v at width %d: %d weeks leave %v units empty with calendar still to draw",
+					fields, width, weeks, slack)
+			}
+		}
+	}
+}
+
+// TestTheHeatmapFarEndIsWhereTheDefaultCardsYearLands is the stronger claim,
+// and it is why the layout declares a far end of its own rather than the
+// typo guard every other layout takes: on the card it draws when nothing is
+// asked for, there is no accepted width with a square's worth of empty space
+// at the end of it.
+//
+// The sweep is the whole range and not samples because of what that end is
+// for. The grid stops at a year, so a width past the one where the year fits
+// has room for weeks that do not exist, and the layout drew the year and then
+// the empty quarter this rewrite was meant to remove: three hundred and nine
+// units of it at twelve hundred, measured. If the end is ever moved past where
+// the year lands, some width in the sweep leaves a pitch of empty space and
+// this fails with that width named.
+func TestTheHeatmapFarEndIsWhereTheDefaultCardsYearLands(t *testing.T) {
+	def := mustLayout(t, "activity-heatmap")
+	numsW := heatNumsWidth(heatNums())
+	for width := def.MinWidth; width <= def.MaxWidth; width++ {
+		weeks, slack := heatSlack(float64(width), numsW)
+		if slack >= heatPitch {
+			t.Fatalf("width %d: %d weeks leave %v units empty, room for another week", width, weeks, slack)
+		}
+	}
+	// The far end is exactly where the year lands: one pitch less is a week
+	// short of it, and the end itself is the whole year.
+	if got := heatGridWeeks(float64(def.MaxWidth), numsW); got != heatWeeksMax {
+		t.Errorf("the far end draws %d weeks, want the year, %d", got, heatWeeksMax)
+	}
+	if got := heatGridWeeks(float64(def.MaxWidth)-heatPitch, numsW); got != heatWeeksMax-1 {
+		t.Errorf("a pitch short of the far end draws %d weeks, want %d", got, heatWeeksMax-1)
+	}
+	if got := heatGridWeeks(400, numsW); got != 16 {
+		t.Errorf("the minimum width draws %d weeks, want 16", got)
+	}
+	if got := heatGridWeeks(defaultWidth, numsW); got != 23 {
+		t.Errorf("the default width draws %d weeks, want 23", got)
+	}
+	// A width the layout would refuse still cannot ask for more than the year,
+	// because the year is all the data there is.
+	if got := heatGridWeeks(4000, numsW); got != heatWeeksMax {
+		t.Errorf("a very wide card draws %d weeks, want the year the data holds, %d", got, heatWeeksMax)
+	}
+}
+
+// TestTheHeatmapTitleNamesTheWeeksItDrew keeps the heading honest at every
+// width, since the width is now what decides the period.
+func TestTheHeatmapTitleNamesTheWeeksItDrew(t *testing.T) {
+	for _, width := range []int{400, defaultWidth, mustLayout(t, "activity-heatmap").MaxWidth} {
+		doc := mustRender(t, sample(), &Options{Theme: "dark", Layout: "activity-heatmap", Width: width})
+		weeks := heatGridWeeks(float64(width), heatNumsWidth(heatNums()))
+		want := fmt.Sprintf("Contributions, last %d weeks", weeks)
+		if !strings.Contains(doc, ">"+want+"<") {
+			t.Errorf("width %d: the card does not say %q", width, want)
+		}
+		if n := strings.Count(doc, `<rect class="h`); n != weeks*7+5 {
+			t.Errorf("width %d: %d squares for %d weeks plus the key", width, n, weeks)
+		}
+	}
+	// A card asked for no sparkline draws no calendar, so the heading names no
+	// period rather than a period nothing on the card shows.
+	bare := mustRender(t, sample(), &Options{Theme: "dark", Layout: "activity-heatmap", Fields: numericFields})
+	if !strings.Contains(bare, ">Contributions<") {
+		t.Error("without the sparkline the heading must be Contributions and name no weeks")
+	}
+	if strings.Contains(bare, `<rect class="h`) {
+		t.Error("without the sparkline the card must draw no squares at all")
+	}
+}
+
+// TestTheHeatmapWaveTakesTheSameTimeAtEveryWidth is why heatSweep and not a
+// step per week is the constant: the cycle the file's comment defends, 0.22 s
+// of sweep plus 1.6 s of fade, has to stay 1.82 s when the grid is sixteen
+// weeks wide and when it is fifty-two. A fixed step per week would have taken
+// a year of squares to 2.62 s, outside the range that figure was chosen from.
+func TestTheHeatmapWaveTakesTheSameTimeAtEveryWidth(t *testing.T) {
+	for _, width := range []int{400, defaultWidth, 700, mustLayout(t, "activity-heatmap").MaxWidth} {
+		doc := mustRender(t, sample(), &Options{Theme: "dark", Layout: "activity-heatmap", Width: width})
+		for _, m := range animatingClass.FindAllStringSubmatch(doc, -1) {
+			want := "." + m[1] + "{animation:" + m[1] + " 1.82s ease-out 1}"
+			if !strings.Contains(doc, want) {
+				t.Errorf("width %d: %q is not in the card", width, want)
+			}
+		}
+		// The last week is the one that ends the cycle, so its fade must start
+		// exactly the sweep in, and no week may start after it.
+		weeks := heatGridWeeks(float64(width), heatNumsWidth(heatNums()))
+		last := 100 * heatSweep / (heatSweep + heatWave)
+		if want := fmt.Sprintf("@keyframes m%d{0%%,%s%%", weeks-1, num(last)); !strings.Contains(doc, want) {
+			t.Errorf("width %d: the last week does not start at the end of the sweep, want %q", width, want)
+		}
+	}
+}
+
+// A grid wider than the series it has is the young account: every week before
+// the first day of data is drawn empty rather than left out, so the card is the
+// same shape whoever renders it.
+func TestTheHeatmapPadsAYoungAccountToTheFullGrid(t *testing.T) {
+	young := sample()
+	young.Sparkline = []int{0, 3, 12, 7, 0, 1, 20, 15, 4, 9}
+	doc := mustRender(t, young, &Options{
+		Theme: "dark", Layout: "activity-heatmap",
+		Width: mustLayout(t, "activity-heatmap").MaxWidth,
+	})
+	if n := strings.Count(doc, `<rect class="h`); n != heatWeeksMax*7+5 {
+		t.Errorf("a ten day series drew %d squares, want a full year plus the key", n)
+	}
+	// Ten days of which eight are above zero: the rest of the year is empty.
+	// The key's own empty square carries no week and so is not one of these.
+	if n := strings.Count(doc, `<rect class="h0 `); n != heatWeeksMax*7-8 {
+		t.Errorf("%d squares are empty, want every day but the eight with activity", n)
 	}
 }
 
@@ -993,7 +1168,7 @@ func mustLayout(t *testing.T, name string) Layout {
 }
 
 func TestHeatLevelsEndTodayAndPadTheFront(t *testing.T) {
-	levels := heatLevels([]int{4, 0, 1})
+	levels := heatLevels([]int{4, 0, 1}, 12)
 	if len(levels) != 84 {
 		t.Fatalf("len = %d, want 84 days", len(levels))
 	}
@@ -1009,17 +1184,26 @@ func TestHeatLevelsEndTodayAndPadTheFront(t *testing.T) {
 	for i := range long {
 		long[i] = i
 	}
-	if got := heatLevels(long); got[83] != 4 || got[0] != 4 {
+	if got := heatLevels(long, 12); got[83] != 4 || got[0] != 4 {
 		t.Errorf("a long series keeps its last twelve weeks: %v", got)
 	}
-	for _, v := range heatLevels([]int{0, 0, 0}) {
+	// A grid of a year takes a year of the series, and a series shorter than
+	// the grid is still padded at the front however wide the grid is.
+	if got := heatLevels(long, heatWeeksMax); len(got) != heatWeeksMax*7 || got[len(got)-1] != 4 {
+		t.Errorf("a year of grid holds %d days ending on %d", len(got), got[len(got)-1])
+	}
+	if got := heatLevels([]int{4, 0, 1}, heatWeeksMax); got[len(got)-3] != 4 || got[0] != 0 {
+		t.Errorf("a short series in a year of grid: %v", got[:4])
+	}
+	for _, v := range heatLevels([]int{0, 0, 0}, 12) {
 		if v != 0 {
 			t.Fatal("a flat series has no level above zero")
 		}
 	}
 	doc := mustRender(t, sample(), &Options{Theme: "dark", Layout: "activity-heatmap"})
-	if n := strings.Count(doc, `<rect class="h`); n != 84+5 {
-		t.Errorf("drew %d squares, want 84 plus the five of the legend", n)
+	weeks := heatGridWeeks(defaultWidth, heatNumsWidth(heatNums()))
+	if n := strings.Count(doc, `<rect class="h`); n != weeks*7+5 {
+		t.Errorf("drew %d squares, want %d plus the five of the legend", n, weeks*7)
 	}
 }
 
@@ -1120,16 +1304,109 @@ func TestOverlaysCapTheirNumbers(t *testing.T) {
 	}
 }
 
-func TestEachLayoutRefusesAWidthBelowItsMinimum(t *testing.T) {
+// Every layout's three widths are either all zero, which is the registry
+// saying the width follows the content, or an ordered triple with the drawn
+// width between the two ends. A layout that declared a near end and forgot the
+// far one would refuse every width there is, and the refusal would name a
+// maximum of zero.
+func TestEveryLayoutsWidthsAreOrderedOrAbsent(t *testing.T) {
+	for _, def := range layouts {
+		if def.Width == 0 && def.MinWidth == 0 && def.MaxWidth == 0 {
+			continue
+		}
+		if def.MinWidth <= 0 || def.MaxWidth <= 0 {
+			t.Errorf("%s declares a width of %d between %d and %d: a layout states all three or none",
+				def.Name, def.Width, def.MinWidth, def.MaxWidth)
+			continue
+		}
+		if def.MinWidth > def.Width || def.Width > def.MaxWidth {
+			t.Errorf("%s is drawn at %d, outside its own %d to %d", def.Name, def.Width, def.MinWidth, def.MaxWidth)
+		}
+	}
+}
+
+func TestEachLayoutRefusesAWidthOutsideWhatItDraws(t *testing.T) {
+	for _, def := range layouts {
+		if def.MinWidth == 0 {
+			checkWidthFollowsContent(t, def.Name)
+			continue
+		}
+		for _, w := range []int{def.MinWidth - 1, def.MaxWidth + 1, 20000} {
+			checkWidthMessageNamesBothEnds(t, def.Layout, w)
+		}
+		for _, w := range []int{def.MinWidth, def.Width, def.MaxWidth} {
+			if _, err := SVG(sample(), &Options{Layout: def.Name, Width: w}); err != nil {
+				t.Errorf("%s refused %d, which is inside what it draws: %v", def.Name, w, err)
+			}
+		}
+	}
+}
+
+// checkWidthFollowsContent is the badge-row half: a layout that declares no
+// width has no end to exceed, so Options.Width is neither refused by it nor
+// drawn with, and every width gives the card the pills decided on.
+func checkWidthFollowsContent(t *testing.T, layout string) {
+	t.Helper()
+	same := mustRender(t, sample(), &Options{Layout: layout})
+	for _, w := range []int{1, 300, maxWidth + 5000} {
+		out, err := SVG(sample(), &Options{Layout: layout, Width: w})
+		if err != nil {
+			t.Errorf("%s refused width %d, but its width follows its content: %v", layout, w, err)
+			continue
+		}
+		if string(out) != same {
+			t.Errorf("%s drew a different card at width %d, but its width follows its content", layout, w)
+		}
+	}
+}
+
+// checkWidthMessageNamesBothEnds is what the refusal owes a reader who typed
+// the width at a command line: the number he gave and the two he may give,
+// because being told only that his is wrong leaves him to go and look the
+// right ones up.
+func checkWidthMessageNamesBothEnds(t *testing.T, l Layout, w int) {
+	t.Helper()
+	err := widthError(t, l.Name, w)
+	for _, want := range []string{
+		strconv.Itoa(w), l.Name,
+		strconv.Itoa(l.MinWidth), strconv.Itoa(l.MaxWidth),
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%s at width %d: %q does not say %q", l.Name, w, err, want)
+		}
+	}
+}
+
+// widthError is the error a layout gives for a width it will not draw, and
+// fails the test when it gives none or gives one that is not ErrWidth.
+func widthError(t *testing.T, layout string, width int) error {
+	t.Helper()
+	_, err := SVG(sample(), &Options{Layout: layout, Width: width})
+	if err == nil {
+		t.Fatalf("%s accepted width %d", layout, width)
+	}
+	if !errors.Is(err, ErrWidth) {
+		t.Fatalf("%s at width %d gave %v, want ErrWidth", layout, width, err)
+	}
+	return err
+}
+
+// A width is one more input and not a source of variation: the same card at
+// the same width has to come out the same bytes, or a workflow that commits it
+// writes a diff a day out of nothing.
+func TestACardIsByteIdenticalAtEveryWidthItAccepts(t *testing.T) {
 	for _, def := range layouts {
 		if def.MinWidth == 0 {
 			continue
 		}
-		if _, err := SVG(sample(), &Options{Layout: def.Name, Width: def.MinWidth - 1}); err == nil {
-			t.Errorf("%s accepted a width below %d", def.Name, def.MinWidth)
-		}
-		if _, err := SVG(sample(), &Options{Layout: def.Name, Width: def.MinWidth}); err != nil {
-			t.Errorf("%s refused its own minimum: %v", def.Name, err)
+		for _, w := range []int{def.MinWidth, def.Width, def.MaxWidth} {
+			o := &Options{Layout: def.Name, Theme: "dark", Width: w}
+			first := mustRender(t, sample(), o)
+			for range 5 {
+				if mustRender(t, sample(), o) != first {
+					t.Fatalf("%s at width %d is not byte-identical between runs", def.Name, w)
+				}
+			}
 		}
 	}
 }
@@ -1179,7 +1456,7 @@ func TestTrafficLabelsNameTheWindowOrAdmitItIsUnknown(t *testing.T) {
 // A negative day is no activity, not a level below the empty square, and a
 // zero day stays empty however busy the rest of the calendar was.
 func TestHeatLevelsTreatNegativeAndZeroDaysAsEmpty(t *testing.T) {
-	levels := heatLevels([]int{-3, 0, 1, 2, 8})
+	levels := heatLevels([]int{-3, 0, 1, 2, 8}, 12)
 	if got := levels[79:]; !slices.Equal(got, []int{0, 0, 1, 1, 4}) {
 		t.Errorf("levels = %v, want 0 0 1 1 4", got)
 	}
