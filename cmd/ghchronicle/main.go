@@ -427,7 +427,8 @@ func listRepositories(ctx context.Context, api *ghapi.Client, cfg *config.Config
 // which case it stops where the API does.
 //
 // A sweep cut short by a signal is not a failure: what it reached is written,
-// and the log says the backfill finished.
+// the checkpoint keeps the repositories it had already delivered, and the log
+// says where it stopped. Running the same command again carries on from there.
 func runBackfill(ctx context.Context, runner *run.Runner, cfg *config.Config,
 	accumulator *render.Accumulator, o *options, logger *slog.Logger,
 ) error {
@@ -444,12 +445,22 @@ func runBackfill(ctx context.Context, runner *run.Runner, cfg *config.Config,
 	if err != nil {
 		return err
 	}
+	// Opened before anything is collected, because the one thing it can say is
+	// that this walk must not be resumed, and a refusal is only worth
+	// something before the quota is spent. The bound goes in as it was
+	// spelled, not as it just resolved: see run.Scope.
+	if runner.Progress, err = run.OpenProgress(
+		cfg.BackfillProgressFile(), version, run.ScopeOf(cfg, bound), time.Now(),
+	); err != nil {
+		return err
+	}
 	if runner.BackfillSince.IsZero() {
 		logger.Info("backfill has no lower bound; it stops where the API does")
 	} else {
 		logger.Info("backfill bounded", "since", runner.BackfillSince.Format("2006-01-02"))
 	}
-	logger.Info("backfill starting, this reaches as far back as GitHub allows and may take a while")
+	logger.Info("backfill starting, this reaches as far back as GitHub allows and may take a while",
+		"checkpoint", runner.Progress.Path())
 	if err = runner.Once(ctx); err != nil && ctx.Err() == nil {
 		return err
 	}
@@ -458,6 +469,18 @@ func runBackfill(ctx context.Context, runner *run.Runner, cfg *config.Config,
 	// the same way a sweep does, and a backfill cut short by a signal draws it
 	// from what it reached: its points have been written, and a card is a
 	// picture of those points.
+	//
+	// A resumed one is the case where that sentence needs saying out loud. The
+	// accumulator is a sink, so it holds what this process collected and not
+	// what the process before it did: the families the first half finished are
+	// skipped, and the card is drawn without them. Said rather than refused,
+	// because a partial card is still a picture of real points and the reader
+	// is the one who knows whether that will do.
+	if o.card != "" && runner.Progress.Resumed() {
+		logger.Warn("this card is drawn from the part of the walk this process did; "+
+			"the families the walk it resumes had already finished are not in it",
+			"complete_before_this_process", len(runner.Progress.Complete))
+	}
 	return writeCards(accumulator, files, o, logger)
 }
 
