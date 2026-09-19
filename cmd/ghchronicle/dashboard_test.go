@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -211,24 +212,44 @@ func TestASinkThatCannotDescribeADatasourceSaysSo(t *testing.T) {
 	}
 }
 
-// TestTheLogPanelFollowsTheLokiDatasource: the exported dashboard carries a
+// TestTheLogPanelFollowsTheLokiDatasource. The exported dashboard carries a
 // text panel where a failed job's output would be, because a reader may have
-// no log store. Naming one swaps that panel for the lines.
+// no log store. A Loki sink is a log store, so the panel becomes the lines.
+//
+// The datasource is worked out from the sink rather than asked for: the sink
+// writes to the push endpoint and Grafana queries the base, and the difference
+// between the two is a fixed suffix. Only a sink writing somewhere that suffix
+// does not explain still needs the uid, and that case says so rather than
+// quietly leaving the panel as a note.
 func TestTheLogPanelFollowsTheLokiDatasource(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name  string
+		loki  *config.LokiSink
 		uid   string
 		wants string
+		says  string
 	}{
-		{"no Loki datasource named", "", "text"},
-		{"one named", "loki-uid", "logs"},
+		{"no Loki sink at all", nil, "", "text", ""},
+		{
+			"a sink at the usual endpoint",
+			&config.LokiSink{URL: "http://loki:3100/loki/api/v1/push"}, "", "logs", "",
+		},
+		{
+			"a sink and a uid, which is adopted",
+			&config.LokiSink{URL: "http://loki:3100/loki/api/v1/push"}, "theirs", "logs", "",
+		},
+		{
+			"a sink writing somewhere else",
+			&config.LokiSink{URL: "http://gateway:8080/write"}, "", "text",
+			"does not end in /loki/api/v1/push",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			g := &grafanaStub{missing: true}
 			cfg := influxConfig(g.serve(t))
-			cfg.Sinks.Loki = &config.LokiSink{URL: "http://loki:3100/loki/api/v1/push"}
+			cfg.Sinks.Loki = tc.loki
 			cfg.Grafana.Datasource.LokiUID = tc.uid
 			var said strings.Builder
 			if err := publishDashboards(t.Context(), cfg, &said); err != nil {
@@ -238,7 +259,45 @@ func TestTheLogPanelFollowsTheLokiDatasource(t *testing.T) {
 			if got := logPanelKind(doc); got != tc.wants {
 				t.Errorf("the failed output panel is a %q, want %q", got, tc.wants)
 			}
+			if tc.says != "" && !strings.Contains(said.String(), tc.says) {
+				t.Errorf("output = %q, want it to carry %q", said.String(), tc.says)
+			}
 		})
+	}
+}
+
+// TestTheDerivedLokiDatasourceDropsThePushPath, which is the whole of why it
+// can be derived: what the sink writes to and what Grafana queries are the
+// same server, named by two paths that differ by a documented suffix.
+func TestTheDerivedLokiDatasourceDropsThePushPath(t *testing.T) {
+	t.Parallel()
+	g := &grafanaStub{missing: true}
+	cfg := influxConfig(g.serve(t))
+	cfg.Sinks.Loki = &config.LokiSink{
+		URL: "http://loki:3100/loki/api/v1/push", TenantID: "tenant-one",
+	}
+	var said strings.Builder
+	if err := publishDashboards(t.Context(), cfg, &said); err != nil {
+		t.Fatal(err)
+	}
+	var loki map[string]any
+	for _, body := range g.writes {
+		if body["type"] == "loki" {
+			loki = body
+		}
+	}
+	if loki == nil {
+		t.Fatal("no Loki datasource was written")
+	}
+	if loki["url"] != "http://loki:3100" {
+		t.Errorf("url = %v, want the push path gone", loki["url"])
+	}
+	// A tenant is Loki's word and an organization is Grafana's, and the header
+	// is how the two meet.
+	settings, _ := loki["jsonData"].(map[string]any)
+	secret, _ := loki["secureJsonData"].(map[string]any)
+	if settings["httpHeaderName1"] != "X-Scope-OrgID" || secret["httpHeaderValue1"] != "tenant-one" {
+		t.Errorf("the tenant did not reach the datasource: %v %v", settings, secret)
 	}
 }
 
@@ -637,5 +696,231 @@ func TestTheThreeSinksThatHaveToBeToldTheAddress(t *testing.T) {
 				t.Errorf("url = %v, want %q", got, tc.wantURL)
 			}
 		})
+	}
+}
+
+// TestThePostgresDatasourceComesOutOfTheDSN, in both the shapes libpq takes,
+// because the connecting sink knows the server: it dials it.
+func TestThePostgresDatasourceComesOutOfTheDSN(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		dsn     string
+		url     string
+		db      string
+		user    string
+		sslmode string
+		pass    string
+	}{
+		{
+			"the url form", "postgres://ghc:secret@db.example:6543/metrics?sslmode=verify-full",
+			"db.example:6543", "metrics", "ghc", "verify-full", "secret",
+		},
+		{
+			"the keyword form", "host=db.example port=6543 user=ghc password=secret dbname=metrics",
+			"db.example:6543", "metrics", "ghc", "disable", "secret",
+		},
+		{
+			"no password, which many deployments do not have",
+			"postgres://ghc@db.example:5432/metrics", "db.example:5432", "metrics", "ghc", "disable", "",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			g := &grafanaStub{missing: true}
+			cfg := &config.Config{
+				Sinks:   config.Sinks{Postgres: &config.PostgresSink{DSN: tc.dsn, Batch: 100}},
+				Grafana: &config.Grafana{URL: g.serve(t), Token: "grafana-token"},
+			}
+			var said strings.Builder
+			if err := publishDashboards(t.Context(), cfg, &said); err != nil {
+				t.Fatal(err)
+			}
+			ds := g.writes[0]
+			settings, _ := ds["jsonData"].(map[string]any)
+			secret, _ := ds["secureJsonData"].(map[string]any)
+			for what, pair := range map[string][2]any{
+				"url":      {ds["url"], tc.url},
+				"database": {ds["database"], tc.db},
+				"user":     {ds["user"], tc.user},
+				"sslmode":  {settings["sslmode"], tc.sslmode},
+			} {
+				if fmt.Sprint(pair[0]) != fmt.Sprint(pair[1]) {
+					t.Errorf("%s = %v, want %v", what, pair[0], pair[1])
+				}
+			}
+			if tc.pass == "" {
+				if len(secret) != 0 {
+					t.Errorf("secureJsonData = %v, want none where the dsn carries none", secret)
+				}
+				return
+			}
+			if secret["password"] != tc.pass {
+				t.Errorf("password did not reach the datasource: %v", secret)
+			}
+		})
+	}
+}
+
+// TestADSNThatDoesNotParseIsReported rather than becoming a datasource
+// pointing at nothing.
+func TestADSNThatDoesNotParseIsReported(t *testing.T) {
+	t.Parallel()
+	g := &grafanaStub{missing: true}
+	cfg := &config.Config{
+		Sinks:   config.Sinks{Postgres: &config.PostgresSink{DSN: "postgres://%zz", Batch: 100}},
+		Grafana: &config.Grafana{URL: g.serve(t), Token: "grafana-token"},
+	}
+	var said strings.Builder
+	err := publishDashboards(t.Context(), cfg, &said)
+	if err == nil || !strings.Contains(err.Error(), "sinks.postgres.dsn") {
+		t.Errorf("err = %v, want it to name the setting it could not read", err)
+	}
+}
+
+// TestTheFileSinkStillCannotDescribeADatasource, and now points at the sink
+// that can rather than only at Grafana's own interface.
+func TestTheFileSinkStillCannotDescribeADatasource(t *testing.T) {
+	t.Parallel()
+	g := &grafanaStub{missing: true}
+	cfg := &config.Config{
+		Sinks:   config.Sinks{SQL: &config.SQLSink{Dialect: "postgres", Path: "/tmp/p.sql"}},
+		Grafana: &config.Grafana{URL: g.serve(t), Token: "grafana-token"},
+	}
+	var said strings.Builder
+	err := publishDashboards(t.Context(), cfg, &said)
+	if err == nil || !strings.Contains(err.Error(), "sinks.postgres") {
+		t.Errorf("err = %v, want it to point at the sink that can", err)
+	}
+}
+
+// TestTheSSLModeIsSaidRatherThanGuessed. libpq defaults to "prefer", try TLS
+// and carry on without it, and Grafana's datasource either insists or refuses.
+// A DSN that says nothing gets an answer and a line saying an answer was
+// chosen, because silently choosing either one breaks half the readers.
+func TestTheSSLModeIsSaidRatherThanGuessed(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name     string
+		dsn      string
+		override string
+		want     string
+		note     bool
+	}{
+		{"a mode Grafana has", "postgres://u@h:5432/d?sslmode=verify-ca", "", "verify-ca", false},
+		{"a mode it does not", "postgres://u@h:5432/d?sslmode=prefer", "", "disable", true},
+		{"no mode at all", "host=h port=5432 user=u dbname=d", "", "disable", true},
+		{"the reader's own answer", "postgres://u@h:5432/d?sslmode=prefer", "verify-full", "verify-full", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			g := &grafanaStub{missing: true}
+			cfg := &config.Config{
+				Sinks:   config.Sinks{Postgres: &config.PostgresSink{DSN: tc.dsn, Batch: 100}},
+				Grafana: &config.Grafana{URL: g.serve(t), Token: "grafana-token"},
+			}
+			cfg.Grafana.Datasource.SSLMode = tc.override
+			var said strings.Builder
+			if err := publishDashboards(t.Context(), cfg, &said); err != nil {
+				t.Fatal(err)
+			}
+			settings, _ := g.writes[0]["jsonData"].(map[string]any)
+			if settings["sslmode"] != tc.want {
+				t.Errorf("sslmode = %v, want %v", settings["sslmode"], tc.want)
+			}
+			if said := strings.Contains(said.String(), "grafana.datasource.sslmode"); said != tc.note {
+				t.Errorf("said an answer was chosen = %v, want %v", said, tc.note)
+			}
+		})
+	}
+}
+
+// TestOnlyAPasswordTheDSNWritesReachesGrafana. pgx reads libpq's environment
+// and its password file, which is what the sink wants: it is going to connect.
+// A datasource is written into a Grafana other people can see, so a credential
+// that came from the machine doing the publishing rather than from the
+// configuration is one nobody asked to put there. A Windows runner found this,
+// where a DSN with no password produced one.
+func TestOnlyAPasswordTheDSNWritesReachesGrafana(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		dsn  string
+		env  string
+		want string
+		note bool
+	}{
+		{"written in the url", "postgres://u:written@h:5432/d", "", "written", false},
+		{"written in the keyword form", "host=h port=5432 user=u password=written dbname=d", "", "written", false},
+		{"quoted in the keyword form", "host=h port=5432 user=u password='w r i t' dbname=d", "", "w r i t", false},
+		{"only in the environment", "postgres://u@h:5432/d", "ambient", "", true},
+		{"nowhere at all", "postgres://u@h:5432/d", "", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Not parallel: PGPASSWORD is the environment this is about.
+			t.Setenv("PGPASSWORD", tc.env)
+			g := &grafanaStub{missing: true}
+			cfg := &config.Config{
+				Sinks:   config.Sinks{Postgres: &config.PostgresSink{DSN: tc.dsn, Batch: 100}},
+				Grafana: &config.Grafana{URL: g.serve(t), Token: "grafana-token"},
+			}
+			var said strings.Builder
+			if err := publishDashboards(t.Context(), cfg, &said); err != nil {
+				t.Fatal(err)
+			}
+			secret, _ := g.writes[0]["secureJsonData"].(map[string]any)
+			if tc.want == "" {
+				if len(secret) != 0 {
+					t.Errorf("secureJsonData = %v, want no password the config never named", secret)
+				}
+			} else if secret["password"] != tc.want {
+				t.Errorf("password = %v, want %q", secret["password"], tc.want)
+			}
+			if said := strings.Contains(said.String(), "machine's environment"); said != tc.note {
+				t.Errorf("said where the password came from = %v, want %v", said, tc.note)
+			}
+		})
+	}
+}
+
+// TestAFolderThatCannotBeMadeStopsTheRun, because publishing into the wrong
+// folder is worse than not publishing: the reader looks where they asked for
+// it and finds nothing.
+func TestAFolderThatCannotBeMadeStopsTheRun(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/api/search") {
+			_, _ = io.WriteString(w, `[]`)
+			return
+		}
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = io.WriteString(w, `{"message":"folders:create is required"}`)
+	}))
+	t.Cleanup(srv.Close)
+	cfg := influxConfig(srv.URL)
+	cfg.Grafana.Folder = "GitHub"
+	var said strings.Builder
+	err := publishDashboards(t.Context(), cfg, &said)
+	if err == nil || !strings.Contains(err.Error(), "GitHub") {
+		t.Errorf("err = %v, want it to name the folder it could not make", err)
+	}
+}
+
+// TestALeftoverDatasourceWithNoDashboardIsStillNamed. Changing store can leave
+// either, and a datasource alone still holds a credential and a connection.
+func TestALeftoverDatasourceWithNoDashboardIsStillNamed(t *testing.T) {
+	t.Parallel()
+	g := &grafanaStub{missing: true}
+	// The stub answers dashboards from `present` and datasources from
+	// `missing`, so asking for a uid that is in neither leaves the datasource
+	// answering and the dashboard not.
+	g.present = map[string]bool{}
+	g.missing = false
+	cfg := influxConfig(g.serve(t))
+	var said strings.Builder
+	if err := publishDashboards(t.Context(), cfg, &said); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(said.String(), "(a datasource)") {
+		t.Errorf("output = %q, want a leftover datasource named as one", said.String())
 	}
 }

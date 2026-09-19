@@ -73,6 +73,28 @@ ghchronicle -config config.yaml -publish-dashboard
 It asks GitHub nothing, so it needs no GitHub token, and it prints what it did
 to each datasource and each dashboard.
 
+> **A password from the machine is not copied**
+>
+> pgx reads libpq's environment and its password file, which is what the sink
+> wants, because it is the thing connecting. A datasource is different: it is
+> written into a Grafana other people can see, so only a password the DSN
+> itself carries is sent. One that came from `PGPASSWORD` or a `.pgpass` on
+> whichever machine ran the publish is named in a line and left where it is.
+
+<!-- -->
+
+> **What the token has to be allowed to do**
+>
+> Publishing a dashboard needs an Editor. Creating or correcting a datasource
+> needs `datasources:create`, which an Editor does not have: a token without it
+> gets as far as the dashboard and is refused on the datasource, saying which
+> permission is missing. So a service account that manages its own datasource
+> is an Admin, or an Editor granted that permission; one that only publishes
+> against a datasource named in `grafana.datasource.uid` is an Editor, because
+> adopting reads and never writes.
+
+<!-- -->
+
 > **Grafana often reaches the store by another address**
 >
 > The address the collector writes to and the address Grafana queries are
@@ -83,8 +105,11 @@ to each datasource and each dashboard.
 > refuses on a datasource that does not answer. `grafana.datasource.url` is the
 > address to use instead.
 
-Two of the five sinks describe their own datasource with nothing else said,
-because what they write to is what Grafana queries: InfluxDB and Elasticsearch.
+Three of the five sinks describe their own datasource with nothing else said,
+because what they write to is what Grafana queries: InfluxDB, Elasticsearch,
+and the PostgreSQL sink that connects, whose DSN carries the server, the
+database, the user and, when the DSN itself writes one, the password.
+
 Two more need the address and nothing else, because they write somewhere that
 is not where a query goes: the Prometheus sink is scraped rather than written
 to, and the Graphite sink speaks the ingest port while Grafana asks the web API
@@ -97,10 +122,10 @@ grafana:
     url: http://prometheus:9090
 ```
 
-The fifth cannot be told either. The SQL sink writes statements to a file and
-never connects, so no host, port, user or password exists anywhere in the
-config to build a datasource out of. That one, and any datasource you would
-rather manage yourself, is named instead:
+What cannot be described at all is the SQL sink, the one that writes statements
+to a file: it never connects, so no host, port, user or password exists
+anywhere in its config. That one, and any datasource you would rather manage
+yourself, is named instead:
 
 ```yaml
 grafana:
@@ -125,10 +150,18 @@ Nothing here is assigned by Grafana, so there is nothing to read back out of it
 and write into your config. Both uids are worked out from the store's name, and
 the same run twice writes to the same two places:
 
-| Store           | Datasource uid              | Dashboard uid              |
-| --------------- | --------------------------- | -------------------------- |
-| `influxdb`      | `ghchronicle-influxdb`      | `ghchronicle-influxdb`     |
-| `elasticsearch` | `ghchronicle-elasticsearch` | `ghchronicle-elasticsearch`|
+| Store           | Dashboard uid               | Its datasource                  |
+| --------------- | --------------------------- | ------------------------------- |
+| `influxdb`      | `ghchronicle-influxdb`      | made, from the sink             |
+| `elasticsearch` | `ghchronicle-elasticsearch` | made, from the sink             |
+| `postgres`      | `ghchronicle-postgres`      | made, from the dsn              |
+| `prometheus`    | `ghchronicle-prometheus`    | made, once you give the address |
+| `graphite`      | `ghchronicle-graphite`      | made, once you give the address |
+
+A datasource this makes takes the dashboard's uid, so both are
+`ghchronicle-<store>`, and one you name yourself keeps whatever uid it has.
+A Loki datasource, when the sink's address explains where to find one, is
+`ghchronicle-loki`.
 
 The datasource is created the first time and corrected afterwards, and only the
 fields this writes are compared, so a timeout or a description you set on it
