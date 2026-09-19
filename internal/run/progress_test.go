@@ -960,38 +960,136 @@ func TestAResumedWalkSaysTheFamiliesTheFirstHalfWrote(t *testing.T) {
 }
 
 // TestAResumedFamilyCountsTheRepositoriesTheFirstHalfWrote: a family the stop
-// landed inside covers the repositories this pass walks and the ones already
-// recorded, and a row that counts only the remainder says a family of many
-// repositories covered the few that were left.
-func TestAResumedFamilyCountsTheRepositoriesTheFirstHalfWrote(t *testing.T) {
+// TestPrimeAgainMakesTheNextPassRunEveryFamily.
+//
+// Priming is spent on the first pass of a process, which is what the long
+// running service wants. A backfill going back for what a pass left behind
+// needs it back: that pass marked the families it ran, so a second pass
+// honoring the cadence would skip the very family it came back for, and going
+// back would quietly do nothing.
+//
+// One family, because what is being watched is the flag and not the walk.
+func TestPrimeAgainMakesTheNextPassRunEveryFamily(t *testing.T) {
 	t.Parallel()
-	dir, fake := t.TempDir(), newFake(t)
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	if err := walkRunner(t, dir, fake, &recorded{stopAfterRepos: 3, cancel: cancel}).Once(ctx); err == nil {
-		t.Fatal("the walk was canceled and ended without saying so")
-	}
-	checkpoint := readCheckpoint(t, filepath.Join(dir, "state-progress.json"))
-	_, family, written := checkpoint.Where()
-	if family == "" || written == 0 {
-		t.Fatal("the stop landed between two families, so there is no half walked one to resume")
+	r, _, _ := fakeRunner(t)
+	r.Cfg.Every = everyOnly("forks")
+	if err := r.Cfg.Validate(); err != nil {
+		t.Fatal(err)
 	}
 
-	rows := &familyRows{}
-	resumed := walkRunner(t, dir, fake, rows)
-	if err := resumed.Once(t.Context()); err != nil {
-		t.Fatalf("the resumed walk: %v", err)
+	if err := r.Once(t.Context()); err != nil {
+		t.Fatal(err)
 	}
-	row, ok := rows.rows[family]
-	if !ok {
-		t.Fatalf("no row for %q, the family the stop landed in", family)
+	if !r.prime {
+		t.Fatal("the first pass did not prime, so this test measures nothing")
 	}
-	all := len(resumed.repos)
-	if all <= written {
-		t.Fatalf("the walk covers %d repositories and the checkpoint held %d", all, written)
+	// A second pass of the same process follows the cadences, and the family
+	// the first pass ran is not due again.
+	if err := r.Once(t.Context()); err != nil {
+		t.Fatal(err)
 	}
-	if got := row.Fields["repos"]; got != all {
-		t.Errorf("the row for %q reports %v repositories, want %d: the %d the first half wrote count too",
-			family, got, all, written)
+	if r.prime {
+		t.Error("a second pass primed on its own, so the cadences the first pass set mean nothing")
+	}
+
+	r.PrimeAgain()
+	if err := r.Once(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !r.prime {
+		t.Error("the pass after PrimeAgain did not prime, so a retry would skip the family it came back for")
+	}
+}
+
+// TestRecordedCountsCompleteFamiliesAndTheRepositoriesOfUnfinishedOnes.
+//
+// It is the measure a retry decides by, and the reason it counts only the
+// unfinished families' repositories is the case in the middle here: a family
+// that completes moves its repositories out of Written, which counted over all
+// families would read as work undone.
+func TestRecordedCountsCompleteFamiliesAndTheRepositoriesOfUnfinishedOnes(t *testing.T) {
+	t.Parallel()
+	p, err := OpenProgress(filepath.Join(t.TempDir(), "p.json"), "test-build",
+		Scope{Families: []string{"repo", "actions"}}, walkClock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if families, repos := p.Recorded(); families != 0 || repos != 0 {
+		t.Fatalf("a fresh checkpoint holds %d families and %d repositories, want none", families, repos)
+	}
+
+	if err = p.WroteRepo("actions", "octocat/one", 1, walkClock); err != nil {
+		t.Fatal(err)
+	}
+	if err = p.WroteRepo("actions", "octocat/two", 1, walkClock); err != nil {
+		t.Fatal(err)
+	}
+	if families, repos := p.Recorded(); families != 0 || repos != 2 {
+		t.Errorf("after two repositories: %d families, %d repositories, want 0 and 2", families, repos)
+	}
+
+	// Completing a family empties its repositories, so the pair has to be read
+	// as a pair: the families number grows in the same breath.
+	if err = p.FinishFamily("actions", 2, 2, walkClock); err != nil {
+		t.Fatal(err)
+	}
+	if families, repos := p.Recorded(); families != 1 || repos != 0 {
+		t.Errorf("after the family finished: %d families, %d repositories, want 1 and 0", families, repos)
+	}
+
+	var none *Progress
+	if families, repos := none.Recorded(); families != 0 || repos != 0 {
+		t.Errorf("a checkpoint that is not there holds %d and %d, want none of either", families, repos)
+	}
+}
+
+// TestReadProgressReadsWithoutStartingAnything. Everything OpenProgress does
+// besides reading is about starting, and a reader asking how far a walk has
+// got must not be the thing that creates a checkpoint for a walk nobody is
+// running.
+func TestReadProgressReadsWithoutStartingAnything(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state-progress.json")
+
+	switch p, inProgress, err := ReadProgress(path); {
+	case err != nil:
+		t.Fatalf("a path with no file: %v", err)
+	case inProgress || p != nil:
+		t.Error("it answered that there is a walk in progress when there is no file")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("reading created the checkpoint, so asking about a walk would start one")
+	}
+	if _, inProgress, err := ReadProgress(""); err != nil || inProgress {
+		t.Errorf("no path at all = in progress %v, err %v; want neither", inProgress, err)
+	}
+
+	written, err := OpenProgress(path, "test-build", Scope{Families: []string{"repo"}}, walkClock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = written.FinishFamily("repo", 4, 40, walkClock); err != nil {
+		t.Fatal(err)
+	}
+
+	read, inProgress, err := ReadProgress(path)
+	if err != nil || !inProgress {
+		t.Fatalf("reading a checkpoint that is there = in progress %v, err %v", inProgress, err)
+	}
+	if got, _ := read.Recorded(); got != 1 {
+		t.Errorf("it read %d complete families, want 1", got)
+	}
+	// Read for reporting and not for resuming: a scope it was not written for
+	// is not its business, so unlike OpenProgress it refuses nothing.
+	if !read.Active() {
+		t.Error("what it read answers no to Active, so nothing can be asked of it")
+	}
+
+	if err = os.WriteFile(path, []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = ReadProgress(path); err == nil {
+		t.Error("a file that is not a checkpoint was read as one")
 	}
 }
