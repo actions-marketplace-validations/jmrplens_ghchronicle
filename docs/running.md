@@ -41,14 +41,6 @@ keep it running once you are done watching it.
   Either one works out the platform, takes the newest release, and refuses to
   install anything whose checksum is not the one the release published.
 
-- **Go**
-
-  ```sh
-  go install github.com/jmrplens/ghchronicle/cmd/ghchronicle@latest
-  ```
-
-  Needs a Go toolchain, and builds from source at whatever the newest tag is.
-
 - **Release**
 
   Take the archive for your platform from the
@@ -57,9 +49,17 @@ keep it running once you are done watching it.
   ship as `tar.gz` (`zip` on Windows).
 
   ```sh
-  tar -xzf ghchronicle_2.3.0_linux_amd64.tar.gz
+  tar -xzf ghchronicle_2.4.0_linux_amd64.tar.gz
   sudo install -m 755 ghchronicle /usr/local/bin/
   ```
+
+- **Go**
+
+  ```sh
+  go install github.com/jmrplens/ghchronicle/cmd/ghchronicle@latest
+  ```
+
+  Needs a Go toolchain, and builds from source at whatever the newest tag is.
 
 - **Container**
 
@@ -148,7 +148,7 @@ the version you see is the file it just wrote, and it says so when another
 Pin a version, or choose where it goes:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.sh | VERSION=2.3.0 BIN_DIR=~/bin bash
+curl -fsSL https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.sh | VERSION=2.4.0 BIN_DIR=~/bin bash
 ```
 
 > **Reading it first is the whole point of a short script**
@@ -173,7 +173,7 @@ Release archives are named
 | `aarch64`          | `linux_arm64`       |
 
 ```sh
-VERSION=2.3.0
+VERSION=2.4.0
 arch=$(uname -m); case "$arch" in x86_64) arch=amd64 ;; aarch64) arch=arm64 ;; esac
 base=https://github.com/jmrplens/ghchronicle/releases/download/v$VERSION
 curl -fsSLO "$base/ghchronicle_${VERSION}_linux_${arch}.tar.gz"
@@ -211,7 +211,7 @@ the file, then verify the archive against the file.
     ```
 
     ```text
-    ghchronicle_2.3.0_linux_amd64.tar.gz: OK
+    ghchronicle_2.4.0_linux_amd64.tar.gz: OK
     ```
 
 3. Check the checksum file itself, if you have
@@ -234,6 +234,16 @@ anyone to lose, because the identity being verified is the workflow that ran,
 recorded in a public transparency log. That is what the two `--certificate`
 flags say, and why they are not optional: without them cosign would confirm
 that somebody signed the file, which is not the question.
+
+Then let it write the configuration:
+
+```sh
+ghchronicle -setup
+```
+
+It asks for a token and where the numbers go, checks each answer against the
+thing it names, and writes a `config.yaml` and, if you want one, a systemd
+unit. The installer above offers to run it as its last step.
 
 ### Put it on the PATH
 
@@ -266,7 +276,7 @@ meant to.
   `ghchronicle -version` answers "command not found", it is not on yours.
 
 ```text
-ghchronicle 2.3.0 (commit 4e5dfc2, built 2026-09-14T23:04:02Z)
+ghchronicle 2.4.0 (commit 4e5dfc2, built 2026-09-14T23:04:02Z)
 ```
 
 ### Run it once
@@ -310,7 +320,7 @@ find.
   build date:
 
   ```text
-  ghchronicle 2.3.0 (commit unknown, built unknown)
+  ghchronicle 2.4.0 (commit unknown, built unknown)
   ```
 
   The version comes from the `VERSION` file the module embeds; the other two
@@ -380,7 +390,7 @@ the version you see is the file it just wrote, and it says so when another
 Pin a version, or choose where it goes:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.sh | VERSION=2.3.0 BIN_DIR=~/bin bash
+curl -fsSL https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.sh | VERSION=2.4.0 BIN_DIR=~/bin bash
 ```
 
 > **Reading it first is the whole point of a short script**
@@ -405,7 +415,7 @@ architecture.
 | `x86_64`           | Intel              | `darwin_amd64`      |
 
 ```sh
-VERSION=2.3.0
+VERSION=2.4.0
 arch=$(uname -m); case "$arch" in x86_64) arch=amd64 ;; esac
 base=https://github.com/jmrplens/ghchronicle/releases/download/v$VERSION
 curl -fsSLO "$base/ghchronicle_${VERSION}_darwin_${arch}.tar.gz"
@@ -443,7 +453,7 @@ signature over that file.
     ```
 
     ```text
-    ghchronicle_2.3.0_darwin_arm64.tar.gz: OK
+    ghchronicle_2.4.0_darwin_arm64.tar.gz: OK
     ```
 
 3. Check the checksum file itself, if you have
@@ -465,6 +475,17 @@ The signing is keyless: the identity being verified is the workflow that ran,
 recorded in a public transparency log, which is why the two `--certificate`
 flags are not optional. Without them cosign would confirm that somebody signed
 the file, which is not the question.
+
+Then let it write the configuration:
+
+```sh
+ghchronicle -setup
+```
+
+It asks for a token and where the numbers go, checks each answer against the
+thing it names, and writes a `config.yaml` and, if you want one, a launchd
+agent in `~/Library/LaunchAgents`. The installer above offers to run it as its
+last step.
 
 ### Put it on the PATH
 
@@ -705,7 +726,7 @@ takes parameters, which needs the slightly longer form because `iex` has
 nowhere to put them:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.ps1))) -Version 2.3.0 -BinDir C:\tools -NoPathUpdate
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.ps1))) -Version 2.4.0 -BinDir C:\tools -NoPathUpdate
 ```
 
 > **Reading it first is the whole point of a short script**
@@ -717,6 +738,16 @@ nowhere to put them:
 The rest of this page is that same install done by hand, which is what to
 follow when you want to know exactly what landed where, or when you would
 rather not run a script you did not write.
+
+Then let it write the configuration:
+
+```powershell
+ghchronicle -setup
+```
+
+It asks for a token and where the numbers go, checks each answer against the
+thing it names, and writes a `config.yaml` under `%APPDATA%\ghchronicle` and,
+if you want one, a scheduled task you register with `schtasks`.
 
 ### What is different here
 
@@ -757,7 +788,7 @@ rather than the shell:
 ```
 
 ```powershell
-$version = "2.3.0"
+$version = "2.4.0"
 $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "amd64" }
 $base = "https://github.com/jmrplens/ghchronicle/releases/download/v$version"
 $zip = "ghchronicle_${version}_windows_${arch}.zip"
@@ -876,7 +907,7 @@ ghchronicle -version
 ```
 
 ```text
-ghchronicle 2.3.0 (commit 4e5dfc2, built 2026-09-14T23:04:02Z)
+ghchronicle 2.4.0 (commit 4e5dfc2, built 2026-09-14T23:04:02Z)
 ```
 
 > **If Windows warns about the file**
@@ -1284,6 +1315,410 @@ best, so the fifteen-minute rhythm of `actions` is lost.
 The distroless image, what has to be mounted writable, and a compose file next to InfluxDB.
 
 Source: <https://jmrp.io/docs/ghchronicle/install/docker/>
+
+Pick a stack, put two lines in a `.env` file beside it, and start it.
+
+### InfluxDB and Grafana
+
+```yaml
+# ghchronicle, with InfluxDB and Grafana.
+#
+# Put two lines in a .env file beside this one:
+#
+#   GITHUB_TOKEN=github_pat_...
+#   GITHUB_USER=your-login
+#
+# then `docker compose up -d`. Grafana is on http://localhost:3000,
+# admin and the password below, with the dashboard already in it: the
+# collector publishes it on start and points it at the store beside it.
+
+name: ghchronicle
+
+services:
+
+  influxdb:
+    image: influxdb:3-core
+    # Without a credential, because a store that exists for the first time
+    # when the collector first writes to it has nobody to have made one.
+    command:
+      - influxdb3
+      - serve
+      - --node-id=node0
+      - --object-store=file
+      - --data-dir=/var/lib/influxdb3
+      - --without-auth
+    volumes:
+      - influx:/var/lib/influxdb3
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8181/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  grafana:
+    image: grafana/grafana:12.3.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-ghchronicle}
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  ghchronicle:
+    image: ghcr.io/jmrplens/ghchronicle
+    command: ["-config", "/config.yaml"]
+    restart: unless-stopped
+    depends_on:
+      influxdb:
+        condition: service_healthy
+      grafana:
+        condition: service_healthy
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:?put your token in a .env file beside this}
+      GRAFANA_PASSWORD: ${GRAFANA_PASSWORD:-ghchronicle}
+    volumes:
+      - state:/var/lib/ghchronicle
+    configs:
+      - source: ghchronicle
+        target: /config.yaml
+
+configs:
+  ghchronicle:
+    # The doubled $$ are deliberate. A single $ is read by compose, which
+    # would put the token into the file it hands the container; doubled,
+    # compose writes the reference through and the collector expands it from
+    # its own environment when it starts.
+    content: |
+      github:
+        token: $${GITHUB_TOKEN}
+      targets:
+        user: ${GITHUB_USER:?put the account to collect in a .env file beside this}
+      sinks:
+        influxdb:
+          url: http://influxdb:8181
+          bucket: github
+      grafana:
+        url: http://grafana:3000
+        user: admin
+        password: $${GRAFANA_PASSWORD}
+        publish_on_start: true
+      state_file: /var/lib/ghchronicle/state.json
+
+volumes:
+  influx:
+  state:
+  grafana:
+```
+
+### InfluxDB
+
+```yaml
+# ghchronicle, with InfluxDB.
+#
+# Put two lines in a .env file beside this one:
+#
+#   GITHUB_TOKEN=github_pat_...
+#   GITHUB_USER=your-login
+#
+# then `docker compose up -d`. Nothing is published to Grafana;
+# the store is yours to point one at.
+
+name: ghchronicle
+
+services:
+
+  influxdb:
+    image: influxdb:3-core
+    # Without a credential, because a store that exists for the first time
+    # when the collector first writes to it has nobody to have made one.
+    command:
+      - influxdb3
+      - serve
+      - --node-id=node0
+      - --object-store=file
+      - --data-dir=/var/lib/influxdb3
+      - --without-auth
+    volumes:
+      - influx:/var/lib/influxdb3
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8181/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  ghchronicle:
+    image: ghcr.io/jmrplens/ghchronicle
+    command: ["-config", "/config.yaml"]
+    restart: unless-stopped
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:?put your token in a .env file beside this}
+    volumes:
+      - state:/var/lib/ghchronicle
+    configs:
+      - source: ghchronicle
+        target: /config.yaml
+
+configs:
+  ghchronicle:
+    # The doubled $$ are deliberate. A single $ is read by compose, which
+    # would put the token into the file it hands the container; doubled,
+    # compose writes the reference through and the collector expands it from
+    # its own environment when it starts.
+    content: |
+      github:
+        token: $${GITHUB_TOKEN}
+      targets:
+        user: ${GITHUB_USER:?put the account to collect in a .env file beside this}
+      sinks:
+        influxdb:
+          url: http://influxdb:8181
+          bucket: github
+      state_file: /var/lib/ghchronicle/state.json
+
+volumes:
+  influx:
+  state:
+```
+
+### PostgreSQL and Grafana
+
+```yaml
+# ghchronicle, with PostgreSQL and Grafana.
+#
+# Put two lines in a .env file beside this one:
+#
+#   GITHUB_TOKEN=github_pat_...
+#   GITHUB_USER=your-login
+#
+# then `docker compose up -d`. Grafana is on http://localhost:3000,
+# admin and the password below, with the dashboard already in it: the
+# collector publishes it on start and points it at the store beside it.
+
+name: ghchronicle
+
+services:
+
+  postgres:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_USER: ghchronicle
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ghchronicle}
+      POSTGRES_DB: ghchronicle
+    volumes:
+      # /var/lib/postgresql, not /var/lib/postgresql/data: the 18+ images
+      # moved where they keep the cluster, and a volume on the old path is
+      # refused outright with "in 18+, these Docker images are configured to
+      # store database data in a subdirectory".
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ghchronicle"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  grafana:
+    image: grafana/grafana:12.3.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-ghchronicle}
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  ghchronicle:
+    image: ghcr.io/jmrplens/ghchronicle
+    command: ["-config", "/config.yaml"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      grafana:
+        condition: service_healthy
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:?put your token in a .env file beside this}
+      GRAFANA_PASSWORD: ${GRAFANA_PASSWORD:-ghchronicle}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ghchronicle}
+    volumes:
+      - state:/var/lib/ghchronicle
+    configs:
+      - source: ghchronicle
+        target: /config.yaml
+
+configs:
+  ghchronicle:
+    # The doubled $$ are deliberate. A single $ is read by compose, which
+    # would put the token into the file it hands the container; doubled,
+    # compose writes the reference through and the collector expands it from
+    # its own environment when it starts.
+    content: |
+      github:
+        token: $${GITHUB_TOKEN}
+      targets:
+        user: ${GITHUB_USER:?put the account to collect in a .env file beside this}
+      sinks:
+        postgres:
+          dsn: postgres://ghchronicle:$${POSTGRES_PASSWORD}@postgres:5432/ghchronicle?sslmode=disable
+      grafana:
+        url: http://grafana:3000
+        user: admin
+        password: $${GRAFANA_PASSWORD}
+        publish_on_start: true
+        datasource:
+          sslmode: disable
+      state_file: /var/lib/ghchronicle/state.json
+
+volumes:
+  postgres:
+  state:
+  grafana:
+```
+
+### PostgreSQL
+
+```yaml
+# ghchronicle, with PostgreSQL.
+#
+# Put two lines in a .env file beside this one:
+#
+#   GITHUB_TOKEN=github_pat_...
+#   GITHUB_USER=your-login
+#
+# then `docker compose up -d`. Nothing is published to Grafana;
+# the store is yours to point one at.
+
+name: ghchronicle
+
+services:
+
+  postgres:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_USER: ghchronicle
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ghchronicle}
+      POSTGRES_DB: ghchronicle
+    volumes:
+      # /var/lib/postgresql, not /var/lib/postgresql/data: the 18+ images
+      # moved where they keep the cluster, and a volume on the old path is
+      # refused outright with "in 18+, these Docker images are configured to
+      # store database data in a subdirectory".
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ghchronicle"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  ghchronicle:
+    image: ghcr.io/jmrplens/ghchronicle
+    command: ["-config", "/config.yaml"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:?put your token in a .env file beside this}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ghchronicle}
+    volumes:
+      - state:/var/lib/ghchronicle
+    configs:
+      - source: ghchronicle
+        target: /config.yaml
+
+configs:
+  ghchronicle:
+    # The doubled $$ are deliberate. A single $ is read by compose, which
+    # would put the token into the file it hands the container; doubled,
+    # compose writes the reference through and the collector expands it from
+    # its own environment when it starts.
+    content: |
+      github:
+        token: $${GITHUB_TOKEN}
+      targets:
+        user: ${GITHUB_USER:?put the account to collect in a .env file beside this}
+      sinks:
+        postgres:
+          dsn: postgres://ghchronicle:$${POSTGRES_PASSWORD}@postgres:5432/ghchronicle?sslmode=disable
+      state_file: /var/lib/ghchronicle/state.json
+
+volumes:
+  postgres:
+  state:
+```
+
+### The collector on its own
+
+```yaml
+# ghchronicle, on its own.
+#
+# Put two lines in a .env file beside this one:
+#
+#   GITHUB_TOKEN=github_pat_...
+#   GITHUB_USER=your-login
+#
+# then `docker compose up -d`. It writes what it collects to its own
+# log, which is enough to watch it work. Point sinks at a store of your
+# own when you have one.
+
+name: ghchronicle
+
+services:
+
+  ghchronicle:
+    image: ghcr.io/jmrplens/ghchronicle
+    command: ["-config", "/config.yaml"]
+    restart: unless-stopped
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:?put your token in a .env file beside this}
+    volumes:
+      - state:/var/lib/ghchronicle
+    configs:
+      - source: ghchronicle
+        target: /config.yaml
+
+configs:
+  ghchronicle:
+    # The doubled $$ are deliberate. A single $ is read by compose, which
+    # would put the token into the file it hands the container; doubled,
+    # compose writes the reference through and the collector expands it from
+    # its own environment when it starts.
+    content: |
+      github:
+        token: $${GITHUB_TOKEN}
+      targets:
+        user: ${GITHUB_USER:?put the account to collect in a .env file beside this}
+      sinks:
+        stdout: true
+      state_file: /var/lib/ghchronicle/state.json
+
+volumes:
+  state:
+```
+
+```sh
+docker compose up -d
+```
+
+With Grafana it is on `http://localhost:3000`, user `admin`,
+password `ghchronicle` unless you set `GRAFANA_PASSWORD`. The dashboard is
+already there: the collector publishes it when it starts and points it at the
+store beside it, so there is nothing to import and no datasource to fill in.
+
+The rest of this page is the image itself, for a reader running it another way.
+
+### One container, by hand
 
 ```sh
 docker run -d --name ghchronicle \
