@@ -7,7 +7,7 @@ compactTables:
 
 import { Aside } from "@astrojs/starlight/components";
 
-Noventa y una medidas. Cada fila dice cómo se fecha un punto, porque eso es
+Noventa y dos medidas. Cada fila dice cómo se fecha un punto, porque eso es
 lo que decide qué preguntas puede responder.
 
 ## Cómo leer las tablas
@@ -19,7 +19,94 @@ lo que decide qué preguntas puede responder.
 | **ahora**   | Un estado actual, que solo tiene sentido como "qué es cierto en este momento"                                                           |
 
 Toda medida lleva `owner`, `repo` y `full_name` como etiquetas salvo que sea de
-ámbito de cuenta, en cuyo caso lleva `user`. Casi todas llevan además un campo
+ámbito de cuenta, en cuyo caso lleva `user`. Las tres viajan juntas o no viaja
+ninguna, y `repo` es siempre el nombre corto, tanto en el repositorio de otra
+persona como en el tuyo: `owner=golang`, `repo=go`, `full_name=golang/go`. Eso
+es lo que permite que un filtro escrito para una medida responda en todas las
+demás, y es de donde se construye la variable de repositorio de los dashboards.
+El nombre corto no es una identidad, porque dos dueños pueden usar el mismo, así
+que una consulta que necesita identidad agrupa por `full_name` y una que
+necesita una persona agrupa por `owner`.
+
+Esto no siempre fue cierto en todas. Doce no llevaban `owner` y metían el nombre
+completo dentro de `repo`, y `gh_billing_usage` tenía un `repo` corto, ningún
+`owner` y un `org`. Las tres formas no se solapaban en absoluto, que es peor que
+solaparse mal: un filtro construido desde una de ellas no encontraba nada de
+nada en las otras, y una unión de dos contaba cada repositorio dos veces. Ahora
+son una sola forma. `org` se ha ido con ellas, y no se pierde nada:
+`organizationName` no es una propiedad del endpoint de facturación que esta
+herramienta llama, así que la etiqueta solo podía llevar `(none)`, y en la forma
+de organización de ese informe nombra a la organización cuyo informe se pidió,
+que es la dueña. `owner` lo lleva.
+
+**Actualizar desde una versión anterior a esta forma** es un cambio incompatible
+con lo ya almacenado, y es más grande que una costura. Lee los cuatro párrafos
+siguientes antes de actualizar una base de datos que quieras conservar.
+
+**Tus filas existentes no se convierten, y la mayoría se vuelven a escribir.**
+Las filas ya almacenadas conservan las etiquetas viejas y nada las reescribe,
+porque en InfluxDB el conjunto de etiquetas forma parte de la identidad de un
+punto. Lo que es fácil pasar por alto es que la mayoría de las doce se fechan en
+el momento del propio ítem y se vuelven a ofrecer en cada barrido, y el libro de
+escrituras se indexa por el conjunto de etiquetas. Cambia el conjunto y cada uno
+de esos puntos falla la búsqueda, así que **el primer barrido tras la
+actualización vuelve a escribir todo el histórico retenido, con las mismas
+marcas de tiempo, bajo las etiquetas nuevas, al lado de las filas viejas**. Eso
+no es una costura que puedas esperar a que pase. Una suma sobre un rango que
+cubra el histórico reescrito **se duplica de inmediato y sigue duplicada**,
+mientras GitHub siga sirviendo esos ítems. En la cuenta con la que se desarrolló
+esto eran un año entero de `gh_contribution_day_repo`, que un panel del producto
+suma, y varios cientos de filas de `gh_issue_comment`,
+`gh_external_contribution` y `gh_discussion_comment`. Solo `gh_event` y
+`gh_notification` se comportan como una costura, porque son ventanas que GitHub
+olvida.
+
+**Así que hay dos salidas honestas, y esperar no es una de ellas.** Recrear la
+base de datos, que es lo que hizo el autor; o borrar tú las filas de la forma
+vieja, lo que en InfluxDB 3 significa eliminar las trece tablas, ya que una
+etiqueta no se puede renombrar in situ y un predicado de borrado no puede
+nombrar una etiqueta que las filas nuevas no llevan. No hay migración ni la
+habrá: renombrar una etiqueta significa reescribir cada fila afectada bajo una
+identidad nueva, que es una restauración y no una actualización.
+
+**El destino PostgreSQL deja de cargar hasta que se cambien sus tablas.** Emite
+`CREATE TABLE IF NOT EXISTS`, que no hace nada contra una tabla creada por una
+versión anterior, así que el `INSERT` que viene detrás nombra columnas `owner` y
+`full_name` que no existen y un `ON CONFLICT` con una clave que tampoco existe,
+y psql lo rechaza en las trece medidas. Elimina esas tablas y deja que el
+siguiente fichero las recree, o añade las dos columnas y reconstruye cada clave
+primaria:
+
+```sql
+ALTER TABLE gh_event
+  ADD COLUMN IF NOT EXISTS "owner" TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS "full_name" TEXT NOT NULL DEFAULT '';
+ALTER TABLE gh_event DROP CONSTRAINT IF EXISTS gh_event_pkey;
+ALTER TABLE gh_event
+  ADD PRIMARY KEY ("time", "action", "full_name", "owner", "ref_type", "repo", "type");
+```
+
+**La clave reconstruida tiene que ser exactamente la que declararía esta
+herramienta** para esa medida: `time` seguido de las columnas de etiqueta de la
+tabla de arriba, por orden de nombre. No la armes con las columnas que tu tabla
+tenga. Un `gh_billing_usage` actualizado aún lleva una columna `org` de la forma
+vieja que ya no escribe nadie y que no forma parte de la clave; si la incluyes,
+el `ON CONFLICT` que emite el destino no coincide con ninguna restricción única
+y la carga vuelve a fallar con un mensaje que no apunta a nada. Para comprobar
+tu trabajo, mira el `CREATE TABLE` que el destino escribe para esa medida en un
+fichero nuevo: su lista de `PRIMARY KEY` es la respuesta.
+
+Añadir las columnas conserva las filas viejas pero no las convierte: llevan la
+cadena vacía donde las nuevas llevan un dueño, así que cuentan doble igual que
+en InfluxDB. Eliminar es la opción limpia en los dos almacenes.
+
+**Las consultas que hayas escrito tú hay que actualizarlas, y solo algunas
+fallan en voz alta.** `gh_billing_usage.org` ya no existe, y en InfluxDB 3
+nombrar una columna que ninguna fila ha escrito falla al planificar, así que esa
+te avisa. Un filtro como `gh_event WHERE repo = 'owner/name'` sigue siendo
+válido y devuelve nada en silencio; pasa a ser `full_name = 'owner/name'`.
+
+Casi todas llevan además un campo
 `url`: la página de GitHub de aquello de lo que habla la fila, para que una fila
 de un dashboard que nombra algo también pueda abrirlo. Una `url` es absoluta o
 está ausente, porque los dashboards enlazan al propio valor, y toda medida que
@@ -104,7 +191,7 @@ almacén para cada panel, que es el sitio del que copiar.
 
 ### Todas las medidas, por orden alfabético
 
-Noventa y una, y cada enlace cae en la tabla en la que está.
+Noventa y dos, y cada enlace cae en la tabla en la que está.
 
 [`gh_account`](#cuenta) · [`gh_account_total`](#cuenta) ·
 [`gh_achievement`](#cuenta) · [`gh_achievement_progress`](#cuenta) ·
@@ -117,7 +204,9 @@ Noventa y una, y cada enlace cae en la tabla en la que está.
 [`gh_code_scanning_alert`](#seguridad) ·
 [`gh_code_scanning_alert_item`](#seguridad) ·
 [`gh_code_scanning_analysis`](#seguridad) ·
-[`gh_code_scanning_setup`](#seguridad) · [`gh_commit`](#desarrollo) ·
+[`gh_code_scanning_setup`](#seguridad) ·
+[`gh_collector_family`](#configuración-y-entrega) ·
+[`gh_commit`](#desarrollo) ·
 [`gh_commit_check`](#desarrollo) · [`gh_commit_punchcard`](#cuenta) ·
 [`gh_commits_week`](#cuenta) · [`gh_contribution_day`](#cuenta) ·
 [`gh_contribution_day_repo`](#cuenta) · [`gh_contribution_repo`](#cuenta) ·
@@ -182,12 +271,20 @@ por eso son una instantánea y no una serie.
 | Medida          | Fechado                            | Etiquetas                  | Campos                                                 |
 | --------------- | ---------------------------------- | -------------------------- | ------------------------------------------------------ |
 | `gh_star` | fechado, cuando se dio la estrella | `user` | `starred`, `url`, `user_url` |
-| `gh_star_given` | fechado                            | `user`, `repo`, `language` | `stars`, `repo_stars`, `url`                           |
-| `gh_fork`       | fechado, cuando se creó el fork    | `by`                       | `forks`, `stars`, `days_since_push`, `advanced`, `url` |
+| `gh_star_given` | fechado                            | `user`, `language` | `stars`, `repo_stars`, `url`                           |
+| `gh_fork`       | fechado, cuando se creó el fork    | `by`                       | `forks`, `stars`, `seconds_to_push`, `advanced`, `url` |
 
 `gh_star_given` es la dirección saliente: lo que esta cuenta marcó en
 repositorios ajenos. `advanced` en un fork separa un derivado real de un
-marcador, que es lo que son la mayoría de los forks.
+marcador, que es lo que son la mayoría de los forks, y `seconds_to_push` dice
+cuánto después del fork llegó su último empujón. Es negativo cuando GitHub
+informa de un empujón anterior al propio fork.
+
+Cuánto lleva un fork parado no se guarda, porque la fila está fechada cuando se
+creó el fork: es esa fecha restada de ahora, menos `seconds_to_push`, y lo
+calcula la consulta. Guardado, era un día más cada día escrito sobre una fila
+fechada años antes, así que decía "cuándo corrió la pasada" y no algo del fork,
+y cada reescritura costaba un fichero en la partición del propio fork.
 
 ## Repositorios
 
@@ -238,7 +335,7 @@ de forks por omisión es el único tipo sin fila.
 | `gh_discussion` | fechado, al crearse | `category`, `answerable`, `author`, `number` | `has_answer`, `comments`, `replies`, `reactions`, `upvotes`, `closed`, `state_reason`, `seconds_to_answer`, `seconds_to_close`, `title`, `url` |
 | `gh_label`                 | diario                                            | `label`                                                  | `issues`, `pull_requests`, `used`, `url`                                                                                                                   |
 | `gh_milestone`             | diario                                            | `milestone`, `state`                                     | `progress`, `issues`, `pull_requests`, `days_to_due`, `seconds_to_close`, `url`                                                                            |
-| `gh_external_contribution` | fechado                                           | `user`, `repo`, `number`, `kind`, `state`                | `contributions`, `merged`, `title`, `comments`, `seconds_to_merge`, `seconds_open`, `url`                                                                  |
+| `gh_external_contribution` | fechado                                           | `user`, `number`, `kind`, `state`                | `contributions`, `merged`, `title`, `comments`, `seconds_to_merge`, `seconds_open`, `url`                                                                  |
 
 `gh_commit` es lo que sustituye a `stats/code_frequency`, que devuelve 202 con
 cuerpo vacío para siempre en una cuenta personal. `signature` vale `unsigned`
@@ -325,7 +422,7 @@ GitHub enseña en la página es la suma de los dos.
 | `gh_workflow_step`       | fechado, al terminar | `workflow`, `job_name`, `attempt`, `step`, `conclusion`                   | `duration_seconds`, `step_number`                                                                                                                       |
 | `gh_workflow` | ahora | `workflow`, `path`, `state` | `active`, `age_days`, `days_since_change`, `url` |
 | `gh_artifact`            | fechado, al crearse  | `artifact`                                                                | `live`, `size_bytes`, `retention_days`, `digest`, `run_id`, `head_sha`, `head_branch`, `url`                                                            |
-| `gh_artifact_total`      | ahora                |                                                                           | `live_bytes`, `count`, `walked`                                                                                                                         |
+| `gh_artifact_total`      | ahora                |                                                                           | `live_bytes`, `live_count`, `count`, `walked`                                                                                                           |
 | `gh_actions_cache`       | ahora                |                                                                           | `size_bytes`, `count`                                                                                                                                   |
 | `gh_actions_cache_entry` | diario               | `cache`, `ref`                                                            | `size_bytes`, `caches`, `key`, `days_since_use`, `age_days`                                                                                             |
 | `gh_repo_activity`       | fechado              | `activity`, `actor`                                                       | `events`, `id`, `ref_name`                                                                                                                              |
@@ -429,8 +526,16 @@ no es prueba de falta de runners.
 ejecutado alguna vez. La etiqueta del job de workflow es `job_name` y no `job`,
 porque `job` choca con las etiquetas que Prometheus añade en el scrape.
 
-Cuando `walked` es menor que `count`, el tamaño vivo es un suelo y el
-repositorio tiene más artefactos de los que alcanzó el tope de páginas.
+`gh_artifact_total` lleva tres cuentas porque su tamaño no está sobre
+ninguna de las evidentes. `count` es el total del propio GitHub para el
+repositorio y cuenta los artefactos que GitHub ya ha caducado: medido en
+jmrplens/jmrp.io el 2026-09-17, la página 40 del listado eran caducados hasta
+la última fila, frente a un total declarado de 29.405. `walked` es hasta dónde
+dejó llegar el tope de cinco páginas. `live_bytes` es el tamaño de los
+artefactos que GitHub todavía guarda entre los recorridos, y `live_count`
+cuántos son, que es la cuenta sobre la que está ese tamaño. Cuando `walked` es
+menor que `count`, las cifras vivas son un suelo y no un total, que en ese
+repositorio se quedaba corto por un factor de cincuenta y seis.
 
 `gh_actions_cache` dice que un repositorio ocupa doce gigabytes;
 `gh_actions_cache_entry` dice qué clave los ocupa y cuál lleva una semana sin
@@ -443,9 +548,9 @@ entera es una serie por build.
 | Medida                        | Fechado                           | Etiquetas                                                                                          | Campos                                                                                                                               |
 | ----------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `gh_dependabot_alert`         | ahora                             | `severity`, `ecosystem`                                                                            | `open`, `url`                                                                                                                        |
-| `gh_dependabot_alert_item` | fechado, al abrirse | `number`, `severity`, `ecosystem`, `package`, `ghsa`, `scope`, `relationship`, `manifest` | `alert_state`, `alerts`, `cvss`, `cvss_v4`, `epss`, `epss_percentile`, `cve`, `cwe`, `summary`, `vulnerable_range`, `first_patched`, `dismissed_reason`, `dismissed_by`, `dismissed_comment`, `seconds_to_detect`, `seconds_to_resolve`, `seconds_open`, `url` |
+| `gh_dependabot_alert_item` | fechado, al abrirse | `number`, `severity`, `ecosystem`, `package`, `ghsa`, `scope`, `relationship`, `manifest` | `alert_state`, `alerts`, `cvss`, `cvss_v4`, `epss`, `epss_percentile`, `cve`, `cwe`, `summary`, `vulnerable_range`, `first_patched`, `dismissed_reason`, `dismissed_by`, `dismissed_comment`, `seconds_to_detect`, `seconds_to_resolve`, `url` |
 | `gh_code_scanning_alert`      | ahora                             | `severity`, `tool`                                                                                 | `open`, `url`                                                                                                                        |
-| `gh_code_scanning_alert_item` | fechado, al abrirse               | `number`, `severity`, `tool`, `rule`, `path`, `category`, `ref`                                    | `alert_state`, `resolution`, `alerts`, `commit`, `line`, `cwe`, `seconds_to_resolve`, `seconds_open`, `url`                                                       |
+| `gh_code_scanning_alert_item` | fechado, al abrirse               | `number`, `severity`, `tool`, `rule`, `path`, `category`, `ref`                                    | `alert_state`, `resolution`, `alerts`, `commit`, `line`, `cwe`, `seconds_to_resolve`, `url`                                                       |
 | `gh_code_scanning_analysis`   | fechado, cuando corrió el escaneo | `tool`, `version`, `ref`, `category`                                                               | `analyses`, `results`, `rules`, `commit`                                                                                             |
 | `gh_security_feature`         | ahora                             | `feature`                                                                                          | `enabled`, `open_alerts`, `alerts`, `url`                                                                                            |
 | `gh_security_setting` | ahora | `setting`, `status` | `enabled` |
@@ -491,7 +596,18 @@ entero, no una lectura que falte.
 Una alerta de Dependabot se cierra de tres maneras, no de dos:
 `auto_dismissed_at` es como GitHub cierra por su cuenta la alerta de una
 dependencia de desarrollo, dejando las otras dos a nulo. Una alerta cerrada así
-hacía crecer `seconds_open` para siempre.
+contaba como abierta para siempre.
+
+Una alerta todavía abierta no lleva ningún campo con cuánto lleva abierta, y es
+deliberado. La fila está fechada cuando se abrió la alerta, así que la respuesta
+es ahora menos la marca de tiempo de la propia fila y la calcula el panel cuando
+se le pregunta. Escrita por el colector, como `seconds_open`, solo era cierta en
+el instante de la pasada que la escribió y se movía en cada pasada: quien
+consultara la semana pasada obtenía lo que decidió la última pasada, y cada
+reescritura archivaba otro fichero parquet en la partición de la fecha original
+de la alerta. Medido el 2026-09-17, las dos familias de alertas escribían unos
+234 ficheros al día entre las dos para 1.700 filas, hubiera o no algo nuevo que
+contar en GitHub.
 
 `gh_security_feature` existe para que "sin datos" y "sin alertas" sean
 distinguibles. Sin ella, un repositorio con Dependabot apagado es idéntico a uno
@@ -508,27 +624,27 @@ pasada, que es una página, o sea cien como mucho, y no el total del repositorio
 | `gh_contributions_total` | ahora                                    |                                                                       | `calendar_total`, `commits`, `pull_requests`, `reviews`, `issues`, `repositories`, `restricted`, `repos_with_commits`, `repos_with_issues`, `repos_with_pulls`, `repos_with_reviews`, `url`                                                                                               |
 | `gh_contribution_day`    | fechado, un punto por día del calendario |                                                                       | `contributions`, `level`, `url`                                                                                                                                                                                                                                                                    |
 | `gh_contribution_year` | fechado, fin del año; el año en curso a diario | `year` | `contributions`, `commits`, `issues`, `pull_requests`, `reviews`, `repositories`, `restricted`, `repos_with_commits`, `repos_with_issues`, `repos_with_pulls`, `repos_with_reviews`, `partial` |
-| `gh_contribution_repo` | ahora | `repo`, `kind` (commits, issues, pulls, reviews) | `contributions`, `commits`, `days`, `commits_dated`, `url` |
-| `gh_contribution_day_repo` | fechado, el día al que pertenecen los commits | `repo`, `private`, `own` | `commits`, `url` |
+| `gh_contribution_repo` | ahora | `kind` (commits, issues, pulls, reviews) | `contributions`, `commits`, `days`, `commits_dated`, `url` |
+| `gh_contribution_day_repo` | fechado, el día al que pertenecen los commits | `private`, `own` | `commits`, `url` |
 | `gh_commits_week`        | fechado, el domingo de su semana         |                                                                       | `commits`, `owner_commits`                                                                                                                                                                                                                                                                |
 | `gh_commit_punchcard`    | ahora                                    | `weekday`, `hour`                                                     | `commits`                                                                                                                                                                                                                                                                                 |
-| `gh_package`             | ahora                                    | `package`, `type`, `visibility`, `repo`                               | `versions`, `tagged_versions`, `age_days`, `days_since_update`, `url`                                                                                                                                                                                                                     |
-| `gh_package_version`     | fechado, al publicarse                   | `package`, `type`, `visibility`, `repo`, `tag`                        | `digest`, `published`, `url`                                                                                                                                                                                                                                                              |
+| `gh_package`             | ahora                                    | `package`, `type`, `visibility`                               | `versions`, `tagged_versions`, `age_days`, `days_since_update`, `url`                                                                                                                                                                                                                     |
+| `gh_package_version`     | fechado, al publicarse                   | `package`, `type`, `visibility`, `tag`                        | `digest`, `published`, `url`                                                                                                                                                                                                                                                              |
 | `gh_gist`                | ahora                                    | `gist`, `public`                                                      | `files`, `comments`, `size_bytes`, `description`, `url`, `age_days`, `days_since_update`                                                                                                                                                                                                  |
 | `gh_achievement`         | diario                                   | `achievement`                                                         | `name`, `tier_number`, `tier_name`, `present`, `image`, `url` |
 | `gh_achievement_progress` | diario                                  | `achievement`                                                         | `name`, `count`, `tier_number`, `next_threshold`, `percent`, `page_tier`, `agrees`, `image`, `url` |
 | `gh_social_account`       | ahora; la fila `orcid` a diario         | `provider`                                                            | `url`, `present`                                                                                   |
-| `gh_pinned_item`         | ahora                                    | `repo`                                                                | `pinned`, `position`, `kind`, `stars`, `days_since_push`, `url`                                                                                                                                                                                                                           |
+| `gh_pinned_item`         | ahora                                    |                                                                       | `pinned`, `position`, `kind`, `stars`, `days_since_push`, `url`                                                                                                                                                                                                                           |
 | `gh_profile_flag`        | ahora                                    | `flag`                                                                | `enabled`, `message`, `age_days`, `url`                                                                                                                                                                                                                                                   |
 | `gh_sponsorship`         | fechado, cuando se hizo el patrocinio    | `direction` (sponsor, maintainer), `sponsorable`                      | `sponsorship`, `active`, `one_time`, `privacy`, `tier`, `amount_cents`, `url`                                                                                                                                                                                                             |
 | `gh_sponsors_listing`    | ahora                                    |                                                                       | `has_listing`, `listing_name`, `listing_public`, `listing_age_days`, `tiers`, `monthly_income_cents`, `next_payout_cents`, `next_payout_date`, `sponsor_spend_cents`, `lifetime_received_cents`, `sponsorships_received`, `goal_kind`, `goal_title`, `goal_target`, `goal_percent`, `url` |
 | `gh_sponsors_tier`       | diario                                   | `tier`                                                                | `tiers`, `price_cents`, `one_time`, `retired`, `age_days`, `url`                                                                                                                                                                                                                          |
 | `gh_star_list`           | diario                                   | `list`                                                                | `lists`, `items`, `private`, `name`, `age_days`, `days_since_add`, `url`                                                                                                                                                                                                                  |
 | `gh_account_total`       | ahora                                    |                                                                       | `pulls_opened`, `pulls_merged`, `pulls_open_now`, `pulls_merged_elsewhere`, `pulls_reviewed`, `issues_opened`, `issues_closed`, `issues_elsewhere`, `commented_elsewhere`, `commits`, `repositories`, `url`                                                                               |
-| `gh_repo_created`        | fechado, al crearse                      | `repo`, `fork`                                                        | `created`, `private`, `url`                                                                                                                                                                                                                                                               |
+| `gh_repo_created`        | fechado, al crearse                      | `fork`                                                        | `created`, `private`, `url`                                                                                                                                                                                                                                                               |
 | `gh_key`                 | diario                                   | `kind` (ssh, gpg), `key`                                              | `keys`, `age_days`, `days_since_use`, `never_used`, `days_to_expiry`, `verified`, `revoked`, `can_sign`, `emails`, `url`                                                                                                                                                                  |
-| `gh_discussion_comment` | fechado | `repo`, `own`, `is_answer`, `is_reply`, `author`, `comment`, `number` | `comments`, `answers`, `upvotes`, `title`, `reply_to`, `discussion_answered`, `discussion_answerable`, `discussion_closed`, `answered_by`, `answer_chosen_by`, `state_reason`, `category`, `seconds_to_answer`, `seconds_to_close`, `url` |
-| `gh_issue_comment`       | fechado                                  | `repo`, `own`, `number`                                               | `comments`, `url`                                                                                                                                                                                                                                                                         |
+| `gh_discussion_comment` | fechado | `own`, `is_answer`, `is_reply`, `author`, `comment`, `number` | `comments`, `answers`, `upvotes`, `title`, `reply_to`, `discussion_answered`, `discussion_answerable`, `discussion_closed`, `answered_by`, `answer_chosen_by`, `state_reason`, `category`, `seconds_to_answer`, `seconds_to_close`, `url` |
+| `gh_issue_comment`       | fechado                                  | `own`, `number`                                               | `comments`, `url`                                                                                                                                                                                                                                                                         |
 
 `following` es el número del propio perfil, y cuenta organizaciones además de
 personas. La conexión `following` de GraphQL cuenta solo usuarios, que en esta
@@ -545,10 +661,16 @@ mitad de esos son el tag de respaldo de referrers OCI que GitHub publica por
 cada manifiesto de atestación y de firma: `sha256-` seguido del digest que la
 fila ya lleva. Nadie se descarga uno, hay uno nuevo en cada build, y excluirlos
 redujo a la mitad el recuento en dos paquetes, de ciento veintiséis a cincuenta
-y siete en uno. `gh_package_version` tampoco escribe ya una fila para ellos.
+y siete en uno. `gh_package_version` tampoco escribe ya una fila para ellos. Un
+paquete que GitHub no asocia a ningún repositorio escribe `(none)` en las tres
+etiquetas que nombran uno, en vez de omitirlas y acabar en una serie sin columna
+de repositorio que una consulta pueda nombrar.
 
 `gh_pinned_item` y `gh_profile_flag` son la página del perfil convertida en
 datos. Un elemento fijado no tiene fecha propia, así que ambas se sellan ahora.
+Un gist fijado no está en ningún repositorio: GitHub lo nombra por su hash, así
+que `repo` es ese hash y `owner` es la cuenta, que es el único dueño que puede
+tener un elemento fijado. El campo `kind` dice cuál de los dos es la fila.
 `position` es un campo y no una etiqueta: un repositorio que pasa del hueco dos
 al tres es el mismo elemento fijado, y como etiqueta cada reordenación
 bifurcaría la serie. `flag` es una lista cerrada de ocho: `hireable`,
@@ -728,8 +850,8 @@ separarlos.
 
 | Medida            | Fechado                       | Etiquetas                                               | Campos                          |
 | ----------------- | ----------------------------- | ------------------------------------------------------- | ------------------------------- |
-| `gh_event`        | fechado                       | `type`, `repo`, `action`, `ref_type`                    | `events`, `public`, `commits`, `url` |
-| `gh_notification` | fechado, última actualización | `reason`, `repo`, `private`, `subject_type`   | `is_unread`, `notifications`, `title`, `url` |
+| `gh_event`        | fechado                       | `type`, `action`, `ref_type`                    | `events`, `public`, `commits`, `url` |
+| `gh_notification` | fechado, última actualización | `reason`, `private`, `subject_type`   | `is_unread`, `notifications`, `title`, `url` |
 
 Ambas son ventanas, no historias. GitHub guarda los últimos trescientos eventos
 sea cual sea su fecha y descarta rápido las notificaciones leídas. Lo que se
@@ -766,6 +888,7 @@ adivinarla, así que buena parte de las filas no llevan enlace.
 | `gh_dependency_license` | diario                 | `license`                                       | `packages`                                                                                                                                                                                                                                                                                                                                               |
 | `gh_dependency_change`  | ahora                  | `change`, `ecosystem`                           | `packages`, `vulnerable`, `base`, `head`                                                                                                                                                                                                                                                                                                                 |
 | `gh_rate_limit`         | ahora                  | `resource`                                      | `limit`, `used`, `remaining`, `used_ratio`, `seconds_to_reset`, `own_cost`, `own_queries`                                                                                                                                                                                                                                                                |
+| `gh_collector_family`   | ahora                  | `family`, `scope` (family, repo), `reason`      | `repos`, `failed`, `points`, `error`                                                                                                                                                                                                                                                                                                                     |
 
 Los webhooks fallan en silencio. Medido, un hook llevaba respondiendo 403 en
 setenta y ocho de sus últimas cien entregas y no había nada en ningún sitio que
@@ -814,9 +937,48 @@ movió: GitHub lo regenera en cada petición, así que su ETag nunca acierta y
 cada lectura se cobra de su propio cubo, y un repositorio sin commit tiene los
 paquetes que tenía.
 
-`gh_rate_limit` es la única medida que el colector se toma de sí mismo. GitHub
-lleva quince presupuestos independientes, y sin esto una familia saltada por
-falta de presupuesto es idéntica a una familia sin nada que contar.
+`gh_rate_limit` y `gh_collector_family` son lo que el colector mide de sí
+mismo. La primera es lo que le queda por gastar: GitHub lleva quince
+presupuestos independientes, y sin ella una familia saltada por falta de
+presupuesto es idéntica a una familia sin nada que contar.
+
+La segunda es lo que cada barrido consiguió hacer. Una fila por familia
+ejecutada, siempre, con cuántos repositorios se le preguntaron (`repos`),
+cuántos de ellos no pudo recoger (`failed`) y cuántas filas produjo (`points`);
+y una fila más por cada repositorio que perdió, nombrándolo como lo nombra
+cualquier otra medida y con `reason`, una palabra acotada de qué la detuvo (el
+estado HTTP, `rate limited`, `query too large`, `canceled`), con el mensaje
+entero en el campo `error`. `scope` es lo que distingue las dos: `family` para
+la primera clase, cuyas etiquetas de repositorio llevan `(none)`, y `repo` para
+la segunda. `error` lleva `(none)` también cuando no hay mensaje, y eso no es
+adorno: el protocolo de línea descarta un campo de texto vacío, así que una
+columna escrita solo al fallar no existiría hasta que fallara algo, y una
+consulta que la nombrara se rechazaría en vez de responder sin filas.
+
+Las filas que siempre llegan son el motivo de todo esto. Una familia sin
+ninguna fila en un barrido no se ejecutó en ese barrido, que es justo lo que un
+panel vacío nunca podría decir, y son además lo que hace que la medida exista
+en una cuenta donde nunca ha fallado nada: una tabla en la que InfluxDB no ha
+escrito nunca no se dibuja vacía, se rechaza.
+
+Un valor de `family` no es una familia. `discover` es el listado de
+repositorios, que no se configura ni se puede apagar, y está aquí porque toda
+familia depende de él: un barrido que no puede listar los repositorios no
+ejecuta ninguna, y sin esto la página mostraría dieciséis familias que nunca
+corrieron y ningún motivo para nada de ello. Escribe fila solo cuando falló,
+porque un listado que funcionó ya lo dicen todas las demás filas del mismo
+barrido.
+
+Esto existe por un fallo medido. El 2026-09-16 `gh_workflow_run` y
+`gh_workflow_job` no tenían absolutamente nada de los cinco repositorios más
+activos de esta cuenta, cada uno porque una llamada a
+`/repos/<repo>/actions/runs/<id>/jobs` había respondido `502` una vez y el
+runner tiraba todo lo que esa familia ya había recogido de ese repositorio. La
+fila Continuous integration del dashboard se calculaba sobre una cuenta a la
+que le faltaban sus cinco repositorios más activos, la fila Cost de la misma
+página decía que uno de ellos había quemado 27,6 K minutos de macOS, y el único
+registro de la causa era una línea en un diario. Ahora el colector conserva lo
+que reunió antes de un fallo, y escribe qué falló.
 
 `GET /rate_limit` informa de los presupuestos y no cobra por ninguno, que es lo
 que hace que casi todo esto sea gratis. No todos los que informa son ciertos:
@@ -903,11 +1065,24 @@ haciendo aquí, por cuándo terminó la ejecución.
 
 | Medida             | Fechado          | Etiquetas                               | Campos                                                          |
 | ------------------ | ---------------- | --------------------------------------- | --------------------------------------------------------------- |
-| `gh_billing_usage` | fechado, por día | `product`, `sku`, `unit`, `repo`, `org` | `quantity`, `price_per_unit`, `gross`, `discount`, `net`, `url` |
+| `gh_billing_usage` | fechado, por día | `product`, `sku`, `unit` | `quantity`, `price_per_unit`, `gross`, `discount`, `net`, `url` |
 
 `unit` es el propio `unitType` de GitHub, con la mayúscula con la que GitHub lo
 manda: `Minutes`, `GigabyteHours`, `AICredits`, `Requests`. Se pasa tal cual, sin
 normalizar, y los paneles que leen minutos filtran por esa mayúscula.
+
+No hay etiqueta `org`. El único endpoint de facturación que puede leer una
+cuenta personal es el suyo, y ese informe no tiene `organizationName`: el campo
+es del informe de organización, que necesita una organización a la que
+preguntar. Comprobado contra la descripción OpenAPI publicada y contra el
+endpoint en vivo, donde ninguno de 487 elementos de uso traía la clave.
+Escrita igualmente era `(none)` en todas las filas recogidas, que es una columna
+y una entrada de leyenda que solo dicen que ahí no hay nada.
+
+`repo` es `(none)` en un cargo que no pertenece a ningún repositorio, que es lo
+que es un asiento de Copilot. Eso es una fila real de la factura y no un
+repositorio, así que la tabla de coste por repositorio lo deja fuera; los totales
+de gasto de arriba sí lo incluyen.
 
 `net` no siempre es cero. En la cuenta con la que se desarrolló esto lleva el
 crédito mensual, que es por lo que se guardan el bruto, el descuento y el neto
@@ -939,3 +1114,30 @@ solo se escribe en un evento de push. Ninguna de las dos columnas existe en la
 base de datos de producción contra la que se comprobó esta documentación.
 `gh_label` solo escribe las etiquetas que alguien ha usado;
 `gh_repo_total.labels` es el recuento declarado.
+
+Una de estas la nombra un panel de los que se publican, y es la que más
+probablemente falte: `gh_pull_request.seconds_to_first_human_review`, que solo
+existe una vez que alguien que no es el autor ni un bot ha revisado una pull
+request. En una base donde eso nunca ha pasado, la tarjeta que la lee informa de
+un error de esquema en vez de decir No data, y se lleva por delante los cinco
+valores que la acompañan en el mismo panel. Ninguna consulta puede preguntar si
+una columna existe, así que esto es una propiedad del almacén y no un defecto
+que reparar: la reparación, si llega a morder, es una sola fila de cualquier
+tipo que traiga el campo.
+
+Lo raro que es, medido el 2026-09-17 en la cuenta sobre la que se desarrolló
+esto: catorce filas en todo el almacén, de catorce pull requests de cuatro
+repositorios, la más reciente abierta el 2026-07-05, y ninguna dentro de los
+últimos quince días, frente a 703 pull requests de 825 de esos quince días que
+sí tuvieron una primera revisión de un bot o de su propio autor. El campo no
+está roto; es la respuesta a una pregunta más estrecha de lo que espera quien
+lee, que es por lo que el panel se llama por esa pregunta.
+
+La misma lectura vale para los dos de `gh_workflow_run`. `initial_actor` solo se
+escribe cuando el `actor` y el `triggering_actor` de GitHub son distintos, que es
+una reejecución que pidió otra persona: 0 de 10.201 ejecuciones en quince días
+aquí, y 0 de las 300 ejecuciones más recientes de tres repositorios comprobadas
+contra la API al mismo tiempo. `head_repo` solo se escribe para una ejecución
+que vino de otro repositorio: 18 de esas 10.201, todas de la pull request de un
+mismo fork. Los dos son correctos y los dos son raros, que es el aspecto que
+tiene un campo que solo se escribe cuando GitHub tiene algo que decir.

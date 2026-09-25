@@ -19,7 +19,7 @@
 	config-options check-config-options config-cases check-config-cases \
 	fmt fmt-check vet tidy lint golangci-lint govulncheck analyze analyze-fix sonar \
 	mdlint mdlint-fix check-doc-links docs check-docs \
-	probe gen-dashboards check-dashboards check-dashboards-live \
+	probe gen-dashboards check-dashboards check-dashboards-live shellcheck \
 	check-prometheus check-postgres publish-dashboard \
 	gen-brand gen-brand-compose \
 	site-install site-dev site-build site-check site-analyze site-preview \
@@ -93,7 +93,6 @@ RACE_TIMEOUT ?= 60m
 # bundles, so `make mdlint` and the Markdown job in CI are the same linter.
 # Bump the two together.
 MARKDOWNLINT_CLI2_VERSION := 0.23.2
-MDLINT_GLOBS := "**/*.{md,mdx}" "\#plan" "\#node_modules"
 
 # Version from the VERSION file (single source of truth); commit and date from
 # git. Use shell `cat` (portable to GNU Make 3.81 on macOS; `$(file ...)` needs
@@ -316,6 +315,13 @@ check-layouts: ## Fail if the committed layout facts no longer match the registr
 config-options: ## Regenerate site/src/data/config-options.json from internal/config (cmd/gen_config)
 	go run ./cmd/gen_config
 
+compose: ## Regenerate the compose files the Docker page offers (cmd/gen_compose)
+	go run ./cmd/gen_compose
+
+check-compose: ## Fail if the committed compose files are not what the generator writes (offline)
+	@echo "=== deploy/*.yaml up to date ==="
+	go run ./cmd/gen_compose -check
+
 check-config-options: ## Fail if the committed configuration surface no longer matches the code (offline)
 	@echo "=== site/src/data/config-options.json up to date ==="
 	go run ./cmd/gen_config -check
@@ -399,6 +405,15 @@ fmt-check: ## Report formatting drift without rewriting anything
 vet: ## Run go vet
 	go vet $(PKGS)
 
+# install.sh is one of the two files here that a stranger runs by piping it into
+# a shell, so it is held to a linter rather than to review alone. The scripts/
+# ones are what the Action runs, which is the same argument. install.ps1 has no
+# linter here and is covered by the tests that run it instead.
+shellcheck: ## Lint every shell script (install.sh and scripts/)
+	@command -v shellcheck >/dev/null 2>&1 || { \
+		echo "make shellcheck: shellcheck is not on PATH (apt install shellcheck)"; exit 2; }
+	shellcheck install.sh scripts/*.sh
+
 tidy: ## Tidy go.mod and go.sum
 	go mod tidy
 
@@ -407,11 +422,11 @@ tidy: ## Tidy go.mod and go.sum
 # .markdownlint-cli2.jsonc, which the CLI and the CI action both read.
 mdlint: ## Lint every Markdown and MDX file (markdownlint-cli2, as CI runs it)
 	@echo "=== markdownlint ==="
-	pnpm dlx markdownlint-cli2@$(MARKDOWNLINT_CLI2_VERSION) $(MDLINT_GLOBS)
+	pnpm dlx markdownlint-cli2@$(MARKDOWNLINT_CLI2_VERSION)
 
 mdlint-fix: ## Apply markdownlint's automatic fixes (writes files)
 	@echo "=== markdownlint --fix ==="
-	pnpm dlx markdownlint-cli2@$(MARKDOWNLINT_CLI2_VERSION) --fix $(MDLINT_GLOBS)
+	pnpm dlx markdownlint-cli2@$(MARKDOWNLINT_CLI2_VERSION) --fix
 
 check-doc-links: ## Check that every relative link in tracked Markdown and MDX resolves
 	@echo "=== documentation local links ==="
@@ -498,7 +513,7 @@ analyze-fix: ## Apply every automatic fix the analysis tools offer (writes files
 	@echo "[2/3] golangci-lint run --fix"
 	-golangci-lint run --fix $(PKGS)
 	@echo "[3/3] markdownlint --fix"
-	-pnpm dlx markdownlint-cli2@$(MARKDOWNLINT_CLI2_VERSION) --fix $(MDLINT_GLOBS)
+	-pnpm dlx markdownlint-cli2@$(MARKDOWNLINT_CLI2_VERSION) --fix
 	@echo "=== Fixes applied. Run 'make analyze' to verify. ==="
 
 sonar: ## Scan with SonarCloud locally (needs sonar-scanner and SONAR_TOKEN)
@@ -515,7 +530,7 @@ sonar: ## Scan with SonarCloud locally (needs sonar-scanner and SONAR_TOKEN)
 
 # Two different things are called checking a dashboard, and the names below keep
 # them apart. check-dashboards is offline: it asks whether the committed JSON
-# still matches the specification in cmd/internal/dashboards, so it belongs in
+# still matches the specification in internal/dashboards, so it belongs in
 # CI. check-dashboards-live, check-prometheus and check-postgres ask whether the
 # queries actually work, which needs a running Grafana or PostgreSQL and can
 # therefore never run in CI.

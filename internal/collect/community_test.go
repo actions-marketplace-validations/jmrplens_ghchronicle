@@ -23,24 +23,38 @@ func TestForks(t *testing.T) {
 	if len(calls) != 1 || calls[0].Query["sort"] != "oldest" {
 		t.Errorf("calls = %d, query %v", len(calls), calls[0].Query)
 	}
-	if len(points) != 2 {
-		t.Fatalf("got %d forks, want 2", len(points))
+	if len(points) != 3 {
+		t.Fatalf("got %d forks, want 3", len(points))
 	}
 	alice := find(t, points, "gh_fork", map[string]string{"by": "alice"})
 	if want := time.Date(2025, 2, 10, 10, 0, 0, 0, time.UTC); !alice.Time.Equal(want) {
 		t.Errorf("fork stamped %s, want created_at %s", alice.Time, want)
 	}
-	// Pushed ten days after forking: a real derivative.
+	// Pushed ten days after forking: a real derivative. The ten days are
+	// counted from the fork's own date, not from the sweep's clock, so the
+	// row says the same thing however long after it is read.
 	if alice.Fields["advanced"] != true || fieldInt(t, alice, "stars") != 2 || fieldInt(t, alice, "forks") != 1 {
 		t.Errorf("alice's fork = %v", alice.Fields)
+	}
+	if fieldInt(t, alice, "seconds_to_push") != 10*86400 {
+		t.Errorf("seconds_to_push = %v, want the ten days between the fork and its last push", alice.Fields["seconds_to_push"])
 	}
 	// Pushed thirty seconds after forking: the fork itself, a bookmark.
 	bob := find(t, points, "gh_fork", map[string]string{"by": "bob"})
 	if bob.Fields["advanced"] != false {
 		t.Errorf("bob's fork = %v", bob.Fields)
 	}
-	if fieldInt(t, bob, "days_since_push") != 38 {
-		t.Errorf("days_since_push = %v", bob.Fields["days_since_push"])
+	if fieldInt(t, bob, "seconds_to_push") != 30 {
+		t.Errorf("seconds_to_push = %v, want the thirty seconds the fork itself took", bob.Fields["seconds_to_push"])
+	}
+	// A fork nobody has pushed to inherits the parent's own last push, which
+	// is usually older than the fork: measured live on 2026-09-17, 19 of the
+	// 28 forks of jmrplens/TFG-TFM_EPS and 27 of 34 of jmrplens/phonometry.
+	// So a negative gap is the common case, not an edge, and what it says is
+	// that this fork has never been pushed to at all.
+	carol := find(t, points, "gh_fork", map[string]string{"by": "carol"})
+	if carol.Fields["advanced"] != false || fieldInt(t, carol, "seconds_to_push") != -2*86400 {
+		t.Errorf("carol's fork = %v, want the two days GitHub reports its push before the fork", carol.Fields)
 	}
 }
 
@@ -173,19 +187,19 @@ func checkOutboundComments(t *testing.T, points []sink.Point) {
 	t.Helper()
 	// A comment in someone else's repository is the fact nothing else here
 	// sees, so which side of that line it falls on is a tag.
-	answer := find(t, points, "gh_discussion_comment", map[string]string{"repo": "fosrl/pangolin"})
+	answer := find(t, points, "gh_discussion_comment", map[string]string{"full_name": "fosrl/pangolin"})
 	if answer.Tags["own"] != "false" || answer.Tags["is_answer"] != "true" || fieldInt(t, answer, "answers") != 1 {
 		t.Errorf("accepted answer elsewhere = %v %v", answer.Tags, answer.Fields)
 	}
 	if want := time.Date(2026, 9, 5, 10, 0, 0, 0, time.UTC); !answer.Time.Equal(want) {
 		t.Errorf("comment stamped %s, want createdAt %s", answer.Time, want)
 	}
-	mine := find(t, points, "gh_discussion_comment", map[string]string{"repo": "octocat/hello-world"})
+	mine := find(t, points, "gh_discussion_comment", map[string]string{"full_name": "octocat/hello-world"})
 	if mine.Tags["own"] != "true" || fieldInt(t, mine, "answers") != 0 {
 		t.Errorf("own repository comment = %v %v", mine.Tags, mine.Fields)
 	}
 	checkDiscussionContext(t, points)
-	comment := find(t, points, "gh_issue_comment", map[string]string{"repo": "torvalds/linux"})
+	comment := find(t, points, "gh_issue_comment", map[string]string{"full_name": "torvalds/linux"})
 	if comment.Tags["own"] != "false" || comment.Tags["number"] != "42" {
 		t.Errorf("issue comment = %v", comment.Tags)
 	}
@@ -204,7 +218,7 @@ func checkDiscussionContext(t *testing.T, points []sink.Point) {
 // checkOwnAcceptedAnswer reads the thread this account answered.
 func checkOwnAcceptedAnswer(t *testing.T, points []sink.Point) {
 	t.Helper()
-	won := find(t, points, "gh_discussion_comment", map[string]string{"repo": "fosrl/pangolin"})
+	won := find(t, points, "gh_discussion_comment", map[string]string{"full_name": "fosrl/pangolin"})
 	if won.Fields["discussion_answered"] != true || won.Fields["answered_by"] != "octocat" {
 		t.Errorf("the account's own accepted answer = %v", won.Fields)
 	}
@@ -229,7 +243,7 @@ func checkOwnAcceptedAnswer(t *testing.T, points []sink.Point) {
 // lost to somebody else's answer.
 func checkAnsweredBySomebodyElse(t *testing.T, points []sink.Point) {
 	t.Helper()
-	lost := find(t, points, "gh_discussion_comment", map[string]string{"repo": "ThrowTheSwitch/Ceedling"})
+	lost := find(t, points, "gh_discussion_comment", map[string]string{"full_name": "ThrowTheSwitch/Ceedling"})
 	if lost.Tags["is_answer"] != "false" || fieldInt(t, lost, "answers") != 0 {
 		t.Errorf("a comment that did not win is still not the answer: %v %v", lost.Tags, lost.Fields)
 	}
@@ -251,7 +265,7 @@ func checkAnsweredBySomebodyElse(t *testing.T, points []sink.Point) {
 // indistinguishable from the two above.
 func checkUnansweredIdea(t *testing.T, points []sink.Point) {
 	t.Helper()
-	open := find(t, points, "gh_discussion_comment", map[string]string{"repo": "octocat/hello-world"})
+	open := find(t, points, "gh_discussion_comment", map[string]string{"full_name": "octocat/hello-world"})
 	if open.Fields["discussion_answered"] != false || hasField(open, "answered_by") ||
 		hasField(open, "seconds_to_answer") {
 		t.Errorf("unanswered thread = %v", open.Fields)
@@ -282,11 +296,11 @@ func checkStarsGiven(t *testing.T, points []sink.Point, starred []map[string]any
 	// answers null: measured on 2026-09-10, 9 of the 93 repositories this
 	// account has starred. Written raw that is an empty tag value, which
 	// InfluxDB drops, leaving those rows in a series with no language tag.
-	prose := find(t, points, "gh_star_given", map[string]string{"repo": "sindresorhus/awesome"})
+	prose := find(t, points, "gh_star_given", map[string]string{"full_name": "sindresorhus/awesome"})
 	if prose.Tags["language"] != noneTag {
 		t.Errorf("a repository with no language must still carry the tag, got %q", prose.Tags["language"])
 	}
-	goStar := find(t, points, "gh_star_given", map[string]string{"repo": "golang/go"})
+	goStar := find(t, points, "gh_star_given", map[string]string{"full_name": "golang/go"})
 	if goStar.Tags["language"] != "Go" || goStar.Tags["user"] != "octocat" || fieldInt(t, goStar, "repo_stars") != 125000 {
 		t.Errorf("star given = %v %v", goStar.Tags, goStar.Fields)
 	}
@@ -325,7 +339,7 @@ func checkExternalContributions(t *testing.T, points []sink.Point) {
 		t.Errorf("got %d contributions, want 2 items from each of 5 searches", len(contribs))
 	}
 	merged := find(t, points, "gh_external_contribution", map[string]string{"kind": "pull_request", "state": "merged", "number": "118"})
-	if merged.Tags["repo"] != "someone/else" || merged.Tags["user"] != "octocat" {
+	if merged.Tags["full_name"] != "someone/else" || merged.Tags["user"] != "octocat" {
 		t.Errorf("merged tags = %v", merged.Tags)
 	}
 	if fieldInt(t, merged, "merged") != 1 || fieldInt(t, merged, "seconds_to_merge") != 4*86400 || merged.Fields["title"] != "Handle 422 from the events feed" {
@@ -335,7 +349,7 @@ func checkExternalContributions(t *testing.T, points []sink.Point) {
 		t.Errorf("closed item stamped %s, want closed_at %s", merged.Time, want)
 	}
 	open := find(t, points, "gh_external_contribution", map[string]string{"kind": "issue", "state": "open", "number": "9"})
-	if !open.Time.Equal(startOfDay(testNow)) || open.Tags["repo"] != "another/project" {
+	if !open.Time.Equal(startOfDay(testNow)) || open.Tags["full_name"] != "another/project" {
 		t.Errorf("open item = %s %v", open.Time, open.Tags)
 	}
 	if hasField(open, "merged") {

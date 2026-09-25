@@ -180,6 +180,16 @@ sinks:
   #   keep: 5
   #   dedupe: true
 
+  # The same tables, written straight into a PostgreSQL that is running. This
+  # is the sql sink's other half rather than its replacement: the file is what
+  # you want when the load happens later or under review, when the database is
+  # somewhere this cannot reach, or when the reader is another SQL engine.
+  # This one saves piping that file into psql on a timer.
+  # postgres:
+  #   dsn: ${DATABASE_URL}
+  #   batch: 1000
+  #   dedupe: true
+
   # The _bulk API of Elasticsearch or OpenSearch, one index per measurement
   # named <prefix>-<measurement>, with a document id derived from the point's
   # identity so a rewrite replaces rather than duplicates.
@@ -321,3 +331,55 @@ log:
   # file: /var/log/ghchronicle/ghchronicle.log
   # max_bytes: 67108864
   # keep: 5
+
+# Publishing the dashboard. With this section the binary sets Grafana up
+# itself: it reconciles a datasource from the sink above, asks that datasource
+# whether it can actually reach the store, and publishes the dashboard for the
+# store it writes to. Without it nothing here ever talks to a Grafana.
+#
+# `ghchronicle -config config.yaml -publish-dashboard` does it once and exits,
+# and asks GitHub nothing, so it needs no GitHub token. publish_on_start does
+# the same when the collector starts: the dashboard is generated from the code,
+# so that is what keeps the server from falling behind the binary feeding it.
+#
+# grafana:
+#   url: http://localhost:3000
+#   token: ${GRAFANA_TOKEN}
+#   # The other way in, for a Grafana with no service account yet: one a
+#   # compose file brings up beside this exists for the first time when the
+#   # collector first asks. A token is used in preference wherever both are
+#   # set, because a token can be scoped to publishing and an administrator
+#   # cannot.
+#   user: admin
+#   password: ${GRAFANA_PASSWORD}
+#   # The folder the dashboard goes in, by title, created if it is not there.
+#   # Omit it for Grafana's default folder.
+#   folder: GitHub
+#   publish_on_start: false
+#   # Write over the dashboard at this uid instead of the one named after the
+#   # store. Each generated dashboard carries its own uid, ghchronicle-<store>,
+#   # and every publish overwrites it, so two runs update one dashboard rather
+#   # than leaving two. This is only for a server where it already lives
+#   # somewhere else, imported as new or renamed by hand.
+#   dashboard_uid: my-existing-dashboard
+#   datasource:
+#     # The address Grafana reaches the store by, when that is not the address
+#     # the collector writes to. They differ more often than not: a collector
+#     # on the host writes to a published port while Grafana in a container
+#     # reaches the same store by its name on the container network.
+#     url: http://influxdb:8181
+#     # What the PostgreSQL datasource connects with, when the mode the dsn
+#     # asks for is one Grafana cannot express. libpq defaults to "prefer",
+#     # try TLS and carry on without it, and Grafana's datasource either
+#     # insists or refuses, so that case is answered with disable and a line
+#     # saying so unless this names one of disable, require, verify-ca or
+#     # verify-full.
+#     sslmode: require
+#     # Adopt a datasource that already exists instead of managing one named
+#     # after the store.
+#     uid: ae3x9k2
+#     # A Loki datasource that already exists. With one, the panel that would
+#     # say where a failed job's output went reads the lines from it instead.
+#     # It is adopted rather than made: the Loki sink writes to the push
+#     # endpoint, which is not the half of the API a query goes to.
+#     loki_uid: be7m1q4

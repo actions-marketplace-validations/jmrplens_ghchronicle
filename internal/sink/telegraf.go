@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/jmrplens/ghchronicle/internal/httpx"
 )
 
 // Telegraf posts line protocol to Telegraf's http_listener_v2 input.
@@ -38,7 +40,7 @@ func NewTelegraf(rawURL, username, password string, batch int, timeout time.Dura
 	}
 	return &Telegraf{
 		URL: withDefaultPath(rawURL, "/telegraf"), Username: username, Password: password,
-		Batch: batch, client: &http.Client{Timeout: timeout},
+		Batch: batch, client: &http.Client{Timeout: timeout, Transport: httpx.OwnTransport()},
 	}
 }
 
@@ -58,20 +60,24 @@ func withDefaultPath(rawURL, path string) string {
 func (t *Telegraf) Name() string { return "telegraf" }
 func (t *Telegraf) Close() error { return nil }
 
-func (t *Telegraf) Write(ctx context.Context, points []Point) error {
+// Write posts the batch as line protocol. A point carrying no field the line
+// protocol can render produces no line and is not counted as written.
+func (t *Telegraf) Write(ctx context.Context, points []Point) (int, error) {
 	lines := make([]string, 0, len(points))
 	for _, p := range points {
 		if l := LineProtocol(p); l != "" {
 			lines = append(lines, l)
 		}
 	}
+	written := 0
 	for start := 0; start < len(lines); start += t.Batch {
 		end := min(start+t.Batch, len(lines))
 		if err := t.post(ctx, strings.Join(lines[start:end], "\n")); err != nil {
-			return err
+			return written, err
 		}
+		written = end
 	}
-	return nil
+	return written, nil
 }
 
 func (t *Telegraf) post(ctx context.Context, body string) error {

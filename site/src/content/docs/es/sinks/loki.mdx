@@ -40,6 +40,14 @@ tablas de `internal/sink/loki.go`, la de representaciones o la de rechazos, y
 cada rechazo lleva el motivo por el que no es una línea de log. Una prueba falla
 ante una medida fechada que no aparezca en ninguna de las dos.
 
+En el registro de la pasada ya no se descarta en silencio. Este destino escribe
+una fracción de lo que se le ofrece, así que la mayoría de sus líneas llevan
+[`filtered`](/ghchronicle/es/sinks/#qué-cuenta-la-línea-de-escritura) y
+`points=0`, que es lo que guardó y no lo que se le dio. Una entrada más vieja
+que `max_age`, o demasiado atrasada respecto a la más reciente de su propio
+flujo para que Loki la acepte, también se cuenta ahí y se informa en una línea
+de entradas descartadas.
+
 ## El formato de línea
 
 Cada línea se lee primero como una frase y lleva detrás cada etiqueta y cada
@@ -110,12 +118,13 @@ la consulta es:
 
 Los dashboards exportados no lo muestran, porque un dashboard atado a un
 datasource no puede consultar dos y quien lo importa puede no tener Loki: llevan
-un panel de texto, "Where failure output went", con esa consulta. En un Grafana
-que sí tiene un datasource de Loki, `cmd/publish_dashboard -loki
-<datasource-uid>` publica el dashboard con las líneas leídas de Loki en el
-lugar de ese panel, las más recientes primero, filtradas por la variable de
-repositorio del dashboard allí donde la variable del almacén se puede leer como
-expresión regular. Los pasos están en `dashboards/PUBLISHING.md`.
+un panel de texto, "Where failure output went", con esa consulta. Publicar el
+dashboard desde el colector cambia ese panel por las líneas, las más recientes
+primero, filtradas por la variable de repositorio del dashboard allí donde la
+variable del almacén se puede leer como expresión regular. Basta con un sink de
+Loki cuya dirección termine en `/loki/api/v1/push`: el datasource se crea a
+partir de ella. Uno que escriba en otro sitio lo dice y toma un
+`grafana.datasource.loki_uid` en su lugar.
 
 ## Por dónde seguir
 

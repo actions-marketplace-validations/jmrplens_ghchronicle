@@ -513,14 +513,14 @@ func TestExecuteCardSpeedReachesTheCardAndLeavesTheDefaultAlone(t *testing.T) {
 	}
 
 	// The default, asked for and left out, is one card.
-	if stated := draw(t, "stated", "-card-speed", "0.5"); stated != own {
+	if draw(t, "stated", "-card-speed", "0.5") != own {
 		t.Error("-card-speed 0.5 must draw exactly the card no -card-speed draws, to the byte")
 	}
 
 	// Same command, same bytes: a speed is one more input, not a source of
 	// variation, or a workflow that commits the card writes a diff out of
 	// nothing.
-	if again := draw(t, "slow-again", "-card-speed", "0"); again != draw(t, "slow", "-card-speed", "0") {
+	if draw(t, "slow-again", "-card-speed", "0") != draw(t, "slow", "-card-speed", "0") {
 		t.Error("the same card at the same speed must be written twice to the byte")
 	}
 }
@@ -832,14 +832,20 @@ func graphiteReceiver(t *testing.T) string {
 	return ln.Addr().String()
 }
 
-// TestBuildSinksBuildsEveryConfiguredSink configures all ten sinks and gets
-// ten, the exporter left out of a one-shot run, and a point written through
-// each HTTP store that refuses it logged in the command's own words.
-func TestBuildSinksBuildsEveryConfiguredSink(t *testing.T) {
-	dir := t.TempDir()
+// everySinkConfig is a configuration that turns on all ten sinks, pointed at
+// servers that accept whatever they are sent. Two tests build from it: the one
+// that counts what the builder wires up, and the one that holds every sink to
+// counting only what it stored.
+//
+// `dump` is the format the two dumping sinks take, and it is a parameter
+// because it decides their contract: in json they record a point whatever it
+// carries, and in line protocol they drop one that renders no line. A test
+// that only ever built one of the two would be exercising half of them.
+func everySinkConfig(t *testing.T, dir, dump string) *config.Config {
+	t.Helper()
 	url := stores(t)
 	off := false
-	cfg := &config.Config{
+	return &config.Config{
 		GitHub:    config.GitHub{Timeout: "5s"},
 		StateFile: filepath.Join(dir, "state.json"),
 		Sinks: config.Sinks{
@@ -847,9 +853,9 @@ func TestBuildSinksBuildsEveryConfiguredSink(t *testing.T) {
 			Prometheus:    &config.PrometheusSink{Listen: freeAddr(t), Path: "/metrics"},
 			OTLP:          &config.OTLPSink{Endpoint: url + "/v1/metrics", Service: "ghchronicle", Batch: 10},
 			Loki:          &config.LokiSink{URL: url + "/loki/api/v1/push", Batch: 10},
-			File:          &config.FileSink{Path: filepath.Join(dir, "points"), Format: "json"},
+			File:          &config.FileSink{Path: filepath.Join(dir, "points"), Format: dump},
 			Stdout:        true,
-			StdoutFormat:  "json",
+			StdoutFormat:  dump,
 			Telegraf:      &config.TelegrafSink{URL: url + "/telegraf", Batch: 10, Dedupe: &off},
 			Graphite:      &config.GraphiteSink{Addr: graphiteReceiver(t), Prefix: "github", Batch: 10},
 			SQL:           &config.SQLSink{Dialect: "postgres", Path: filepath.Join(dir, "points.sql")},
@@ -857,6 +863,101 @@ func TestBuildSinksBuildsEveryConfiguredSink(t *testing.T) {
 			DedupeFile:    filepath.Join(dir, "written.bin"),
 		},
 	}
+}
+
+// isVerbatimDump says whether a sink records a point whatever it carries,
+// because recording it is all it does: the JSON dumps write the object as it
+// stands, fields or no fields. Every other sink turns a point into something a
+// store will hold, and a point it cannot turn is a point it must not count.
+//
+// Asked of the sink and not of its name. Stdout and StdoutJSON both answer
+// "stdout", and the file sink is a dump in json and a filter in line protocol,
+// so a list of names exempted four contracts where two were meant, and the two
+// that filter were never held to anything.
+func isVerbatimDump(s sink.Sink) bool {
+	switch dump := s.(type) {
+	case *sink.StdoutJSON:
+		return true
+	case *sink.File:
+		return dump.Format == "json"
+	}
+	return false
+}
+
+// TestNoSinkCountsAPointItCannotStore holds every wired sink to the rule the
+// Write signature exists for. The log line that reports a write says what the
+// store took, and it can only say that because each sink says it: production
+// read "points=440" for a measurement InfluxDB excludes by default and has
+// never held a row of, and a review spent an afternoon on the contradiction.
+//
+// The batch is one point no metrics store can hold: a measurement none of them
+// has a rule or a rendering for, and not one field. A sink that counts it is
+// reporting a write that did not happen. A dump has to count it, which is what
+// makes the exception a claim about the sink rather than a blanket pass: a new
+// sink is held to zero until somebody teaches isVerbatimDump why it is a dump.
+//
+// Run over both dump formats, because the format decides that contract and the
+// two sinks that filter are the ones a single-format run never reaches.
+//
+// Built through buildSinks rather than from a list here, so a sink wired into
+// the command is covered the moment it exists.
+func TestNoSinkCountsAPointItCannotStore(t *testing.T) {
+	// json builds both dumps and line protocol builds neither, so the two runs
+	// between them hold all four contracts and neither run can be the one that
+	// quietly exempts everything.
+	for dump, wantDumps := range map[string]int{"json": 2, "influx": 0} {
+		t.Run(dump, func(t *testing.T) {
+			dir := t.TempDir()
+			logger, _ := newLogger(config.Log{Level: "error"}, io.Discard)
+			built, err := buildSinks(everySinkConfig(t, dir, dump), logger, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeAll(t, built)
+			if len(built) != 10 {
+				t.Fatalf("built %s, want all ten", sinkNames(built))
+			}
+			if dumps := countUnstorable(t, built); dumps != wantDumps {
+				t.Errorf("%d of the ten sinks were treated as verbatim dumps, want %d", dumps, wantDumps)
+			}
+		})
+	}
+}
+
+// countUnstorable offers every sink one point no metrics store can hold and
+// holds each to its own contract, returning how many claimed to be dumps.
+func countUnstorable(t *testing.T, built []sink.Sink) int {
+	t.Helper()
+	unstorable := []sink.Point{{
+		Measurement: "gh_not_a_measurement",
+		Tags:        map[string]string{"repo": "octocat/hello-world"},
+		Time:        time.Now(),
+	}}
+	dumps := 0
+	for _, s := range built {
+		accepted, err := s.Write(t.Context(), unstorable)
+		switch {
+		case err != nil:
+			t.Errorf("%s: %v", s.Name(), err)
+		case isVerbatimDump(s):
+			dumps++
+			if accepted != 1 {
+				t.Errorf("%s records every point it is given, so it must count this one, got %d",
+					s.Name(), accepted)
+			}
+		case accepted != 0:
+			t.Errorf("%s counted %d of a point it cannot store", s.Name(), accepted)
+		}
+	}
+	return dumps
+}
+
+// TestBuildSinksBuildsEveryConfiguredSink configures all ten sinks and gets
+// ten, the exporter left out of a one-shot run, and a point written through
+// each HTTP store that refuses it logged in the command's own words.
+func TestBuildSinksBuildsEveryConfiguredSink(t *testing.T) {
+	dir := t.TempDir()
+	cfg := everySinkConfig(t, dir, "json")
 	var logs syncBuffer
 	logger, _ := newLogger(config.Log{Level: "debug"}, &logs)
 
@@ -890,7 +991,7 @@ func TestBuildSinksBuildsEveryConfiguredSink(t *testing.T) {
 		if s.Name() == "influxdb" || s.Name() == "elasticsearch" {
 			// Both refuse the point, which is a partial success and returns
 			// the count; the log lines are what is checked.
-			_ = s.Write(t.Context(), point)
+			_, _ = s.Write(t.Context(), point)
 		}
 	}
 	for _, line := range []string{
@@ -1162,17 +1263,76 @@ func TestMainRunsTheProcessCommandLine(t *testing.T) {
 	}
 	os.Args, os.Stdout = []string{"ghchronicle", "-version"}, w
 
+	// Drained while main runs, not after it. A pipe blocks its writer once the
+	// buffer fills, and how much that holds is the platform's business: 64 KiB
+	// here, less elsewhere. One line never reaches it, so reading afterwards
+	// would work today and go on working until somebody points this at a
+	// command that prints more, and then it hangs until the test times out on
+	// one operating system while passing in a second on another. The sibling
+	// project lost a thirty-minute Windows job to exactly that.
+	printed := make(chan string, 1)
+	go func() {
+		out, readErr := io.ReadAll(r)
+		if readErr != nil {
+			t.Errorf("reading what main printed: %v", readErr)
+		}
+		printed <- string(out)
+	}()
+
 	main()
 
 	os.Stdout = stdout
 	if err = w.Close(); err != nil {
 		t.Fatal(err)
 	}
-	printed, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatal(err)
+	if out := <-printed; out != buildLine()+"\n" {
+		t.Errorf("main printed %q, want the build line", out)
 	}
-	if string(printed) != buildLine()+"\n" {
-		t.Errorf("main printed %q, want the build line", printed)
+}
+
+// TestExecuteRefusesABackfillItCannotResumeHonestly is the operator's half of
+// the checkpoint: the two refusals have to reach him as an exit and a
+// sentence, before a request is made, rather than as a walk that quietly
+// starts over or quietly skips.
+//
+// Both cases leave the checkpoint where it is. Deleting it is the reader's
+// decision, because what it lists may be hours of somebody's history.
+func TestExecuteRefusesABackfillItCannotResumeHonestly(t *testing.T) {
+	gh := fakegh.New(t, fixtures)
+	for name, tc := range map[string]struct {
+		checkpoint string
+		says       string
+	}{
+		"a checkpoint a kill cut in half": {
+			checkpoint: `{"scope":{"base_url":"","targets":{"user":"octo`,
+			says:       "cannot be read as one",
+		},
+		"a checkpoint from another walk": {
+			checkpoint: `{"scope":{"since":"2y","targets":{"user":"someone-else"}},"started":"2026-09-17T16:19:48Z"}`,
+			says:       "belongs to a different walk",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			cfg := writeConfig(t, dir, gh.URL(), collectorOnly+"sinks:\n  stdout: true\n")
+			path := filepath.Join(dir, "state-progress.json")
+			if err := os.WriteFile(path, []byte(tc.checkpoint), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			before := len(gh.Requests())
+			got := runCommand(t, "-config", cfg, "-backfill")
+			if got.status != 1 || !strings.Contains(got.stderr, tc.says) {
+				t.Errorf("-backfill on %s = %d, want 1 and %q:\n%s", name, got.status, tc.says, got.stderr)
+			}
+			if !strings.Contains(got.stderr, path) {
+				t.Errorf("the refusal does not name the file to look at:\n%s", got.stderr)
+			}
+			if after := len(gh.Requests()); after != before {
+				t.Errorf("%d requests reached GitHub from a backfill that was refused", after-before)
+			}
+			if _, err := os.Stat(path); err != nil {
+				t.Errorf("the refused checkpoint was removed (%v); deleting it is the reader's decision", err)
+			}
+		})
 	}
 }

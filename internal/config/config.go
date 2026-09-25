@@ -39,11 +39,24 @@ type Config struct {
 	// Backfill settings. They only apply to a run started with -backfill.
 	Backfill Backfill `yaml:"backfill"`
 
+	// Grafana is where the dashboard and the datasource it reads from are
+	// published. A pointer because the whole feature is opt-in: without the
+	// key the binary never talks to a Grafana, which is how it behaved before
+	// it could.
+	Grafana *Grafana `yaml:"grafana"`
+
 	// AllowNoSinks lets a caller that supplies its own destination pass
 	// validation with none configured. `-card-only` is the case: it renders an
 	// SVG and needs no database at all. Not a YAML setting, because a config
 	// file with no sink is a mistake rather than an intention.
 	AllowNoSinks bool `yaml:"-"`
+
+	// AllowNoToken lets a caller that makes no request pass validation with no
+	// credential. `-backfill-status` is the case: it reads the checkpoint file
+	// and prints it, and requiring a token to do that would put the status of
+	// a run behind the credential the run needs rather than the one the reader
+	// has. Not a YAML setting, for the same reason as AllowNoSinks.
+	AllowNoToken bool `yaml:"-"`
 
 	intervals map[string]time.Duration
 	// everySource records which config key gave each family its interval, so
@@ -164,6 +177,7 @@ type Sinks struct {
 	Telegraf      *TelegrafSink      `yaml:"telegraf"`
 	Graphite      *GraphiteSink      `yaml:"graphite"`
 	SQL           *SQLSink           `yaml:"sql"`
+	Postgres      *PostgresSink      `yaml:"postgres"`
 	Elasticsearch *ElasticsearchSink `yaml:"elasticsearch"`
 
 	// DedupeFile is where the ledger of what has already been written lives.
@@ -312,6 +326,21 @@ type GraphiteSink struct {
 	// timestamp overwrites, so rewriting unchanged history changes nothing it
 	// holds and costs a file per partition per write in a store that never
 	// compacts. Nil means on. See sinks.dedupe_file.
+	Dedupe *bool `yaml:"dedupe" ghc:"example=true"`
+}
+
+// PostgresSink writes to a PostgreSQL that is running, rather than to a file
+// for somebody to replay. It is the SQL sink's other half, not its
+// replacement: the file is still what a load meant for later, for review, or
+// for another SQL engine wants.
+type PostgresSink struct {
+	// DSN is the connection string, in either shape libpq takes:
+	// postgres://user:pass@host:5432/db?sslmode=require, or the keyword form.
+	DSN string `yaml:"dsn" ghc:"required,secret,example=${DATABASE_URL}"`
+	// Batch is how many upserts go in one round trip.
+	Batch int `yaml:"batch" ghc:"example=1000"`
+	// Dedupe skips writing a point whose fields have not changed since the
+	// last time this sink was given it. See sinks.dedupe_file.
 	Dedupe *bool `yaml:"dedupe" ghc:"example=true"`
 }
 
@@ -750,10 +779,36 @@ func (c *Config) Validate() error {
 	if err := c.resolveHeartbeat(); err != nil {
 		return err
 	}
+	c.resolveGrafana()
 	// Last, because it reads the finished schedule: a family the groups key
 	// removed has no cadence left to complain about.
 	c.noteCadences()
 	return nil
+}
+
+// resolveGrafana expands the credential and the two addresses, and falls back
+// to GRAFANA_TOKEN the way the GitHub token falls back to GITHUB_TOKEN.
+//
+// Every field a reader is likely to write a ${VAR} into has to be named here:
+// expansion is per field rather than over the whole file, so a field left out
+// carries the reference through to the server as text. That is what happened
+// to grafana.token the first time this section was published, and the server
+// answered "Invalid API key" to a request carrying the four characters ${GR.
+func (c *Config) resolveGrafana() {
+	if c.Grafana == nil {
+		return
+	}
+	c.Grafana.URL = expandEnv(c.Grafana.URL)
+	c.Grafana.Token = expandEnv(c.Grafana.Token)
+	c.Grafana.User = expandEnv(c.Grafana.User)
+	c.Grafana.Password = expandEnv(c.Grafana.Password)
+	c.Grafana.DashboardUID = expandEnv(c.Grafana.DashboardUID)
+	c.Grafana.Datasource.URL = expandEnv(c.Grafana.Datasource.URL)
+	c.Grafana.Datasource.UID = expandEnv(c.Grafana.Datasource.UID)
+	c.Grafana.Datasource.LokiUID = expandEnv(c.Grafana.Datasource.LokiUID)
+	if c.Grafana.Token == "" {
+		c.Grafana.Token = os.Getenv("GRAFANA_TOKEN")
+	}
 }
 
 // resolveGitHub expands the credentials and fills the budget reserve.
@@ -764,7 +819,7 @@ func (c *Config) resolveGitHub() error {
 	if c.GitHub.Token == "" {
 		c.GitHub.Token = os.Getenv("GITHUB_TOKEN")
 	}
-	if c.GitHub.Token == "" {
+	if c.GitHub.Token == "" && !c.AllowNoToken {
 		return errors.New("github.token is empty and GITHUB_TOKEN is unset")
 	}
 	if c.GitHub.ReserveRate <= 0 {
@@ -794,6 +849,26 @@ func (c *Config) resolveFilePaths() {
 	}
 }
 
+// BackfillProgressFile is where a backfill keeps its checkpoint: beside the
+// state file, the way the dedupe ledger is.
+//
+// Derived and not a setting of its own, because there is no configuration to
+// make. The file belongs to one walk, it is written only while that walk is
+// running and removed when it ends, and the one thing it has to agree with is
+// which walk: two ghchronicle instances that already keep separate state files,
+// as the author's service and his backfill do, keep separate checkpoints for
+// free, and two that share one would have shared the state file's marks long
+// before they could confuse each other here.
+//
+// Empty when there is no state file, which is what a run keeping its state in
+// memory is, and such a run keeps no checkpoint either.
+func (c *Config) BackfillProgressFile() string {
+	if c.StateFile == "" {
+		return ""
+	}
+	return strings.TrimSuffix(c.StateFile, ".json") + "-progress.json"
+}
+
 // resolveSinks expands the environment in every configured sink, fills its
 // defaults and reports the first that cannot work.
 //
@@ -806,7 +881,7 @@ func (c *Config) resolveSinks() error {
 	for _, resolve := range []func() error{
 		s.Influx.resolve, s.Prometheus.resolve, s.OTLP.resolve, s.Loki.resolve,
 		s.File.resolve, s.resolveStdout, s.Telegraf.resolve, s.Graphite.resolve,
-		s.SQL.resolve, s.Elasticsearch.resolve,
+		s.SQL.resolve, s.Postgres.resolve, s.Elasticsearch.resolve,
 	} {
 		if err := resolve(); err != nil {
 			return err
@@ -934,6 +1009,22 @@ func (g *GraphiteSink) resolve() error {
 	return nil
 }
 
+// resolve checks the one thing a connection needs and fills the batch.
+func (s *PostgresSink) resolve() error {
+	if s == nil {
+		return nil
+	}
+	s.DSN = expandEnv(s.DSN)
+	if strings.TrimSpace(s.DSN) == "" {
+		return errors.New("sinks.postgres: dsn is required, " +
+			"either postgres://user:pass@host:5432/db or the keyword form")
+	}
+	if s.Batch <= 0 {
+		s.Batch = 1000
+	}
+	return nil
+}
+
 func (s *SQLSink) resolve() error {
 	if s == nil {
 		return nil
@@ -979,7 +1070,7 @@ func (c *Config) requireOneSink() error {
 	s := &c.Sinks
 	if s.Influx == nil && s.Prometheus == nil && s.OTLP == nil && s.Loki == nil &&
 		s.File == nil && !s.Stdout && s.Telegraf == nil && s.Graphite == nil &&
-		s.SQL == nil && s.Elasticsearch == nil {
+		s.SQL == nil && s.Postgres == nil && s.Elasticsearch == nil {
 		return errors.New("sinks: enable at least one of influxdb, prometheus, otlp, loki, file, stdout, telegraf, graphite, sql or elasticsearch, " +
 			"or run with -card <path> -card-only to draw a card and write the points nowhere")
 	}
@@ -1297,4 +1388,63 @@ func Why(fam string) string { return defaultEvery[fam].why }
 func BuiltinEvery(fam string) (time.Duration, bool) {
 	f, known := defaultEvery[fam]
 	return f.every, known
+}
+
+// Grafana is the server the dashboard is published to, and how it should
+// reach the store this writes into.
+type Grafana struct {
+	URL   string `yaml:"url" ghc:"example=http://localhost:3000"`
+	Token string `yaml:"token" ghc:"secret,example=${GRAFANA_TOKEN}"`
+	// User and Password are the other way in, for a Grafana with no service
+	// account yet: one a compose file brings up beside this exists for the
+	// first time when the collector first asks. A token is used in preference
+	// wherever both are set, because a token can be scoped to publishing and
+	// an administrator cannot.
+	User     string `yaml:"user" ghc:"example=admin"`
+	Password string `yaml:"password" ghc:"secret,example=${GRAFANA_PASSWORD}"`
+	// Folder is the folder the dashboard goes in, by title, created when it is
+	// not there. Empty means Grafana's default folder.
+	Folder string `yaml:"folder" ghc:"example=GitHub"`
+	// PublishOnStart reconciles the datasource and the dashboard once when the
+	// collector starts, before the first sweep. Off by default: a collector
+	// that writes to Grafana without being asked would surprise, and the
+	// dashboard is generated from the code, so this is what keeps a server
+	// from quietly falling behind the binary that feeds it.
+	PublishOnStart bool `yaml:"publish_on_start" ghc:"example=false"`
+	// DashboardUID writes over the dashboard at this uid instead of the one
+	// named after the store. The generated dashboards carry their own uid and
+	// every publish overwrites it, so this is only for a server where the
+	// dashboard already lives somewhere else: one imported through the UI with
+	// Grafana's "import as new" asked for, or one whose uid was changed by
+	// hand. Without it a second dashboard would appear beside the first and
+	// the one being looked at would stop being the one being updated.
+	DashboardUID string `yaml:"dashboard_uid" ghc:"example=my-existing-dashboard"`
+	// Datasource overrides what is otherwise read from the sink.
+	Datasource GrafanaDatasource `yaml:"datasource"`
+}
+
+// GrafanaDatasource is the two things about a datasource that the sink cannot
+// answer for itself.
+type GrafanaDatasource struct {
+	// URL is the address Grafana reaches the store by, when that is not the
+	// address the collector writes to. They differ more often than not: a
+	// collector on the host writes to a published port and Grafana in a
+	// container reaches the same store by its name on the container network,
+	// and copying the sink's address across produces a datasource Grafana
+	// accepts and cannot use.
+	URL string `yaml:"url" ghc:"example=http://influxdb:8181"`
+	// UID adopts a datasource that already exists instead of managing one
+	// named after the store.
+	UID string `yaml:"uid" ghc:"example=ae3x9k2"`
+	// SSLMode is what the PostgreSQL datasource connects with, when the mode
+	// in the dsn is one Grafana cannot express. libpq's default is "prefer",
+	// try TLS and carry on without it, and Grafana's datasource either
+	// insists or refuses, so that case is chosen here rather than guessed.
+	SSLMode string `yaml:"sslmode" ghc:"example=require"`
+	// LokiUID is a Loki datasource that already exists. With one, the panel
+	// that would say where a failed job's output went reads the lines from it
+	// instead. It is adopted rather than made: the Loki sink writes to the
+	// push endpoint, and a datasource built from that address would be
+	// pointed at the half of the API that does not answer queries.
+	LokiUID string `yaml:"loki_uid" ghc:"example=be7m1q4"`
 }

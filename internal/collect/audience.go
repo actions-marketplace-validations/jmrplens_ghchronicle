@@ -138,7 +138,7 @@ func (n *audienceNode) forks() []forkRow {
 	return rows
 }
 
-func (a Audience) Collect(ctx context.Context, c *ghapi.Client, now time.Time) ([]sink.Point, error) {
+func (a Audience) Collect(ctx context.Context, c *ghapi.Client, _ time.Time) ([]sink.Point, error) {
 	if len(a.Repos) == 0 || (!a.Stars && !a.Forks) {
 		return nil, nil
 	}
@@ -153,22 +153,21 @@ func (a Audience) Collect(ctx context.Context, c *ghapi.Client, now time.Time) (
 	var points []sink.Point
 	failed := aliasBatch(ctx, c, a.Repos, size, build, func(repo Repo, node audienceNode) {
 		if a.Stars {
-			base := map[string]string{"owner": repo.Owner, "repo": repo.Name, "full_name": repo.FullName}
+			base := repoTags(repo.Owner, repo.Name)
 			points = append(points, starPoints([][]starRow{node.stars()}, base,
 				githubPage(repo.FullName, "stargazers"))...)
 		}
 		if a.Forks {
-			points = append(points, forkPoints(node.forks(), repo, now)...)
+			points = append(points, forkPoints(node.forks(), repo)...)
 			if a.Overflow != nil && node.Forks.TotalCount > audiencePage {
 				a.Overflow(repo)
 			}
 		}
 	})
-	// Only a total failure is a failure: aliasBatch already kept every
-	// repository that answered, and a family that returned most of its rows
-	// should not be marked as not having run.
-	if len(points) == 0 && failed != nil {
-		return nil, failed
-	}
-	return points, nil
+	// Both: aliasBatch already kept every repository that answered, and the
+	// error goes back with them rather than being dropped because some of
+	// them did. Whether a family that half failed is marked as having run is
+	// the runner's decision and is made there; here it is a fact, and a fact
+	// nobody was told cost five repositories their whole history once.
+	return points, failed
 }

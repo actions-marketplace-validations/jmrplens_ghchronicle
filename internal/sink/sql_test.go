@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func sqlToBuffer() (*SQL, *bytes.Buffer) {
 func TestSQLDeclaresTheTableOnceAndUpserts(t *testing.T) {
 	s, buf := sqlToBuffer()
 	at := time.Unix(0, 1700000000000000000)
-	err := s.Write(context.Background(), []Point{
+	_, err := s.Write(context.Background(), []Point{
 		{
 			Measurement: "gh_repo", Tags: map[string]string{"repo": "a", "user": "o'reilly"},
 			Fields: map[string]any{
@@ -56,10 +57,10 @@ func TestSQLAddsAColumnThatArrivesLater(t *testing.T) {
 		Measurement: "gh_actions_cache", Tags: map[string]string{"repo": "a"},
 		Fields: map[string]any{"bytes": 12, "entries": 2}, Time: at.Add(time.Hour),
 	}}
-	if err := s.Write(context.Background(), first); err != nil {
+	if _, err := s.Write(context.Background(), first); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Write(context.Background(), second); err != nil {
+	if _, err := s.Write(context.Background(), second); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -73,7 +74,7 @@ func TestSQLAddsAColumnThatArrivesLater(t *testing.T) {
 
 func TestSQLSkipsPointsWithNoUsableField(t *testing.T) {
 	s, buf := sqlToBuffer()
-	if err := s.Write(context.Background(), []Point{{
+	if _, err := s.Write(context.Background(), []Point{{
 		Measurement: "gh_x",
 		Tags:        map[string]string{"a": "b"}, Fields: map[string]any{"note": "", "n": nil}, Time: time.Now(),
 	}}); err != nil {
@@ -90,7 +91,7 @@ func TestSQLRotatedFileDeclaresItsOwnTables(t *testing.T) {
 	s := NewSQL("", path, 200, 3)
 	at := time.Unix(1700000000, 0)
 	for i := range 6 {
-		if err := s.Write(context.Background(), []Point{{
+		if _, err := s.Write(context.Background(), []Point{{
 			Measurement: "gh_repo",
 			Tags:        map[string]string{"repo": "a"}, Fields: map[string]any{"stars": i},
 			Time: at.Add(time.Duration(i) * time.Hour),
@@ -149,7 +150,7 @@ func TestSQLCloseFlushesWhatIsBuffered(t *testing.T) {
 	}
 
 	f := NewSQL("", filepath.Join(t.TempDir(), "points.sql"), 0, 0)
-	if err := f.Write(context.Background(), []Point{{Measurement: "m", Fields: map[string]any{"v": 1}, Time: time.Unix(1, 0)}}); err != nil {
+	if _, err := f.Write(context.Background(), []Point{{Measurement: "m", Fields: map[string]any{"v": 1}, Time: time.Unix(1, 0)}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.Close(); err != nil || f.file.fh != nil {
@@ -167,13 +168,13 @@ func TestSQLCloseFlushesWhatIsBuffered(t *testing.T) {
 func TestSQLAddsATagThatArrivesLaterAsAPlainColumn(t *testing.T) {
 	s, buf := sqlToBuffer()
 	at := time.Unix(1700000000, 0)
-	if err := s.Write(context.Background(), []Point{{
+	if _, err := s.Write(context.Background(), []Point{{
 		Measurement: "gh_x", Tags: map[string]string{"repo": "a"}, Fields: map[string]any{"v": 1}, Time: at,
 	}}); err != nil {
 		t.Fatal(err)
 	}
 	buf.Reset()
-	if err := s.Write(context.Background(), []Point{{
+	if _, err := s.Write(context.Background(), []Point{{
 		Measurement: "gh_x", Tags: map[string]string{"repo": "a", "branch": "main"},
 		Fields: map[string]any{"v": 2, "size": 2.5, "ok": true}, Time: at,
 	}}); err != nil {
@@ -204,17 +205,17 @@ func TestSQLReportsAStatementItCannotWrite(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			s, _ := sqlToBuffer()
-			if err := s.Write(context.Background(), first); err != nil {
+			if _, err := s.Write(context.Background(), first); err != nil {
 				t.Fatal(err)
 			}
 			s.w = broken()
-			if err := s.Write(context.Background(), second); err == nil {
+			if _, err := s.Write(context.Background(), second); err == nil {
 				t.Error("Write reported success through a writer that refused it")
 			}
 		})
 	}
 	s := &SQL{w: broken()}
-	if err := s.Write(context.Background(), first); err == nil {
+	if _, err := s.Write(context.Background(), first); err == nil {
 		t.Error("Write reported success when the table could not be declared")
 	}
 }
@@ -225,7 +226,7 @@ func TestSQLDeclaresEveryFieldThatArrivesLater(t *testing.T) {
 	s, buf := sqlToBuffer()
 	at := time.Unix(1700000000, 0)
 	for _, fields := range []map[string]any{{"v": 1}, {"v": 1, "w": 2, "x": 3}} {
-		if err := s.Write(context.Background(), []Point{{Measurement: "gh_x", Fields: fields, Time: at}}); err != nil {
+		if _, err := s.Write(context.Background(), []Point{{Measurement: "gh_x", Fields: fields, Time: at}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -244,7 +245,7 @@ func TestSQLReportsAFileItCannotOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := NewSQL("", filepath.Join(blocker, "points.sql"), 0, 0)
-	if err := s.Write(context.Background(), []Point{{Measurement: "m", Fields: map[string]any{"v": 1}, Time: time.Unix(1, 0)}}); err == nil {
+	if _, err := s.Write(context.Background(), []Point{{Measurement: "m", Fields: map[string]any{"v": 1}, Time: time.Unix(1, 0)}}); err == nil {
 		t.Error("Write reported success under a path that is a file")
 	}
 }
@@ -268,17 +269,42 @@ func TestSQLTypesAndLiterals(t *testing.T) {
 		{true, "BOOLEAN", "TRUE"},
 		{false, "BOOLEAN", "FALSE"},
 		{"it's\x00", "TEXT", "'it''s'"},
-		{"", "TEXT", ""},
 		{at, "TIMESTAMPTZ", "'2026-09-01T12:00:00.000005Z'::timestamptz"},
 		{time.Time{}, "TIMESTAMPTZ", "NULL"},
-		{nil, "", ""},
-		{[]int{1}, "", ""},
+		{nil, "", "NULL"},
+		{[]int{1}, "", "NULL"},
 	} {
 		if got := sqlType(tc.v); got != tc.typ {
 			t.Errorf("sqlType(%#v) = %q, want %q", tc.v, got, tc.typ)
 		}
-		if got := sqlValue(tc.v); got != tc.literal {
-			t.Errorf("sqlValue(%#v) = %q, want %q", tc.v, got, tc.literal)
+		// The two renderings of one value: what a connection is handed, and
+		// what a file says. A difference between them is the two sinks
+		// writing different data from the same point.
+		if got := sqlLiteral(sqlArg(tc.v)); got != tc.literal {
+			t.Errorf("sqlLiteral(sqlArg(%#v)) = %q, want %q", tc.v, got, tc.literal)
 		}
+	}
+}
+
+// TestAnEmptyStringIsNoCellAtAll. It is not stored as an empty string and not
+// stored as NULL: the column is left out of the row, which is the rule the
+// line protocol follows and the reason the emptiness cannot live in the
+// renderer, where the old sqlValue kept it.
+func TestAnEmptyStringIsNoCellAtAll(t *testing.T) {
+	p := Point{
+		Measurement: "gh_repo",
+		Tags:        map[string]string{"full_name": "a/b"},
+		Fields:      map[string]any{"language": "", "stars": 3},
+	}
+	shapes := sqlShapes([]Point{p})
+	cols, _, ok := sqlCells(p, shapes["gh_repo"])
+	if !ok {
+		t.Fatal("a point with one real field wrote no row")
+	}
+	if slices.Contains(cols, "language") {
+		t.Errorf("columns = %v, want the empty string left out", cols)
+	}
+	if !slices.Contains(cols, "stars") {
+		t.Errorf("columns = %v, want the field that has a value", cols)
 	}
 }

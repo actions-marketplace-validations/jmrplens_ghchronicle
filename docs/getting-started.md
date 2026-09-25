@@ -40,7 +40,7 @@ container, a scheduled workflow.
 | --------------- | ------------------------------------------------------------------------------------------------------ |
 | **family**      | One collector, named in the configuration: `actions`, `stars`, `issues`. There are 34                |
 | **group**       | A named set of families, for switching a whole area on or off: `ci`, `security`, `audience`. There are 8 |
-| **measurement** | One kind of row in the store, named `gh_*`: `gh_star`, `gh_workflow_run`. There are 91               |
+| **measurement** | One kind of row in the store, named `gh_*`: `gh_star`, `gh_workflow_run`. There are 92               |
 | **point**       | One row: a measurement, its tags, its fields and the date the thing happened                         |
 | **sweep**       | One pass over the families that are due, which is what the process does on a loop                    |
 | **backfill**    | A run with `-backfill`, which walks the history instead of the increment                             |
@@ -66,14 +66,43 @@ Six steps and a configuration file. The only decision worth thinking about
 before you start is which store keeps the history, and you can defer that by
 printing the points to the terminal first.
 
+### The short way
+
+If you have a terminal, let it ask:
+
+```sh
+ghchronicle -setup
+```
+
+It asks for a token, checks with GitHub who the token is, asks which account to
+collect and where to put the numbers, checks that the place answers, offers the
+dashboard and offers to set it up to run by itself. What it writes is a
+`config.yaml` that loads and, when you asked for a service, a unit, an agent or
+a scheduled task for whichever system this is.
+
+Credentials never go in the configuration. They go in a file beside it that
+only you can read, and the configuration refers to them by name.
+
+The installer above offers to run it as its last step, so on a new machine the
+two together are the whole of getting started.
+
+The rest of this page is what it writes, for a reader who would rather write it
+themselves or wants to know what they just agreed to.
+
 ### Zero to a first sweep
 
 1. **Install the binary.**
 
-    - **Go**
+    - **Script**
 
       ```sh
-      go install github.com/jmrplens/ghchronicle/cmd/ghchronicle@latest
+      curl -fsSL https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.sh | bash
+      ```
+
+      On Windows, in PowerShell:
+
+      ```powershell
+      irm https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.ps1 | iex
       ```
 
     - **Release**
@@ -86,6 +115,12 @@ printing the points to the terminal first.
 
       ```sh
       docker pull ghcr.io/jmrplens/ghchronicle
+      ```
+
+    - **Go**
+
+      ```sh
+      go install github.com/jmrplens/ghchronicle/cmd/ghchronicle@latest
       ```
 
 2. **Create a token** at `https://github.com/settings/tokens` and export it.

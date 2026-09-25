@@ -201,7 +201,7 @@
     },
     {
       "datasource": "${DS_ELASTICSEARCH}",
-      "description": "Page views, unique visitors and clones, summed over the dashboard range, so they move with the range picker. GitHub only keeps 14 days of traffic, so a range wider than that shows what was captured while it was still there.",
+      "description": "Page views, unique visitors and the people who cloned, summed over the dashboard range, so they move with the range picker. GitHub only keeps 14 days of traffic, so a range wider than that shows what was captured while it was still there. Cloners rather than clones because a clone is counted per pull and continuous integration pulls all day: on the account this was measured against one repository was cloned 135,683 times in a fortnight by 1,807 cloners, and 186 K beside 2.89 K views read as an audience. The clone count itself is two panels of the Audience section, \"Clones over time\" and \"Clone amplification\", where it is the subject rather than a headline.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -253,7 +253,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Clones"
+                "value": "Unique cloners"
               }
             ]
           }
@@ -350,7 +350,7 @@
           "datasource": "${DS_ELASTICSEARCH}",
           "metrics": [
             {
-              "field": "count",
+              "field": "uniques",
               "id": "9",
               "type": "sum"
             }
@@ -733,7 +733,7 @@
         },
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "The whole life of each repository in one row: not what happened in the dashboard range, but everything there has ever been. The repository picker holds every repository the account can see, its forks and its archived ones alongside its own, so a count here is over all of them until the picker is narrowed. Sorted by commits, a fork of a busy project outranks anything the account wrote, so the fork and archived flags are columns here and a click on either sorts by it.",
+          "description": "The whole life of each repository in one row: not what happened in the dashboard range, but everything there has ever been. The repository picker holds every repository the account can see, its forks and its archived ones alongside its own, so a count here is over all of them until the picker is narrowed. Sorted by commits, a fork of a busy project outranks anything the account wrote, 370,296 commits against 3,385 on the account this was measured on, so the table opens with the account's own repositories first and the forks under them, both ranked by commits. The fork and archived flags are columns here rather than a filter, the title being what it is, and a click on either sorts by it.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -821,6 +821,10 @@
             },
             "showHeader": true,
             "sortBy": [
+              {
+                "desc": false,
+                "displayName": "Fork"
+              },
               {
                 "desc": true,
                 "displayName": "Commits"
@@ -928,7 +932,7 @@
         },
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "Each repository the account created, dated when it was created rather than when a sweep noticed it. Forks and private repositories are included, which is the point: those are exactly the ones a sweep with `include_forks` off never discovers. The contributions collection offers one trailing year of them at a time, so a fresh install sees a year here and the table reaches further back with every year the rows are kept. It names its own window rather than taking the dashboard's, so narrowing the range at the top of the page does not narrow this table. Elasticsearch answers only inside the dashboard range, so years outside it are missing.",
+          "description": "A trailing year at a time, whatever the row above is called: GitHub's contributions collection offers twelve months of them per sweep, so a fresh install sees one year here and the table reaches further back with every year the rows are kept. Each repository the account created, dated when it was created rather than when a sweep noticed it. Forks and private repositories are included, which is the point: those are exactly the ones a sweep with `include_forks` off never discovers. It names its own window rather than taking the dashboard's, so narrowing the range at the top of the page does not narrow this table. Elasticsearch answers only inside the dashboard range, so years outside it are missing.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -3528,7 +3532,7 @@
         },
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "Commits this account made in each repository over the last year, as the profile counts them.",
+          "description": "Commits this account made in each repository over the last year, as the profile counts them. The rows include repositories this account does not own, so the name carries its owner in every store but this one, where the owner is dropped for width and the row is still identified by the whole name behind the column. Named in full here, for the reason Graphite gives: the terms bucket is both the grouping key and the label.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -3641,7 +3645,7 @@
             {
               "bucketAggs": [
                 {
-                  "field": "repo.keyword",
+                  "field": "full_name.keyword",
                   "id": "77",
                   "settings": {
                     "min_doc_count": "1",
@@ -3692,7 +3696,7 @@
                 "indexByName": {},
                 "renameByName": {
                   "Top Metrics": "Commits",
-                  "repo.keyword": "Repository",
+                  "full_name.keyword": "Repository",
                   "url.keyword": "Link"
                 }
               }
@@ -3905,10 +3909,10 @@
           },
           "targets": [
             {
-              "alias": "{{term repo.keyword}}",
+              "alias": "{{term full_name.keyword}}",
               "bucketAggs": [
                 {
-                  "field": "repo.keyword",
+                  "field": "full_name.keyword",
                   "id": "83",
                   "settings": {
                     "min_doc_count": "1",
@@ -4047,7 +4051,7 @@
       "panels": [
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "How much closed in the range and how long each took. Every duration is a median: half of what merged or closed took less than the number shown. Time to first review is the wait before a person other than the author looked at a pull request, so review bots, which answer in seconds, and the author's own replies are left out; a range where nobody else reviewed anything reads No data, which is the honest answer. Lines per pull request is the median of added plus removed by a merged one.",
+          "description": "How much closed in the range and how long each took. Every duration is a median: half of what merged or closed took less than the number shown. Time to review by someone else is the wait before a person other than the author looked at a pull request, so review bots, which answer in seconds, and the author's own replies are left out; a range in which nobody else reviewed anything reads \"no human review\" rather than a number, which is the honest answer and not the claim that nothing was reviewed. On the account this was measured against, 0 of 925 pull requests in the range had one. Lines per pull request is the median of added plus removed by a merged one.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -4082,7 +4086,7 @@
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Time to first review"
+                  "options": "Time to review by someone else"
                 },
                 "properties": [
                   {
@@ -4100,6 +4104,18 @@
                   {
                     "id": "unit",
                     "value": "s"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Time to review by someone else"
+                },
+                "properties": [
+                  {
+                    "id": "noValue",
+                    "value": "no human review"
                   }
                 ]
               },
@@ -4135,7 +4151,7 @@
                 "properties": [
                   {
                     "id": "displayName",
-                    "value": "Time to first review"
+                    "value": "Time to review by someone else"
                   }
                 ]
               },
@@ -5521,7 +5537,7 @@
         },
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "Time to merge only counts what merged. This is the other half: what is still open and how long it has been, which is the number that decides what to do next rather than describing what already happened. Each pull request is read from its newest row, so one that merged inside the range is not here any more. This store cannot read each item from its newest row, so one that closed inside the range stays listed as open, at the reading of its last open day, until the range moves past that day.",
+          "description": "Time to merge only counts what merged. This is the other half: what is still open and how long it has been, which is the number that decides what to do next rather than describing what already happened. Each pull request is read from its newest row, so one that merged inside the range is not here any more. Archived repositories are left out, since nothing in one can be merged, closed or run until it is unarchived; narrowing the picker to one shows an empty table here rather than rows nobody can act on. A fork's pull request is still one that can be merged, so those stay and Fork says which they are. This store cannot read each item from its newest row, so one that closed inside the range stays listed as open, at the reading of its last open day, until the range moves past that day. Only gh_repo carries the fork and archived flags and this store cannot join one measurement to another, so the rows the SQL dashboards leave out are listed here.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -5608,6 +5624,18 @@
                   {
                     "id": "custom.width",
                     "value": 90
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Fork"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 70
                   }
                 ]
               },
@@ -5749,7 +5777,7 @@
         },
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "The same question for issues: what is still open and for how long. Labels is what the issue was filed as, so an old one reads as a bug nobody fixed or a wish nobody granted. Each issue is read from its newest row, so one closed inside the range is not here any more. This store cannot read each item from its newest row, so one that closed inside the range stays listed as open, at the reading of its last open day, until the range moves past that day.",
+          "description": "The same question for issues: what is still open and for how long. Labels is what the issue was filed as, so an old one reads as a bug nobody fixed or a wish nobody granted. Each issue is read from its newest row, so one closed inside the range is not here any more. Archived repositories are left out, since nothing in one can be merged, closed or run until it is unarchived; narrowing the picker to one shows an empty table here rather than rows nobody can act on. A fork's issues stay, and Fork says which they are. This store cannot read each item from its newest row, so one that closed inside the range stays listed as open, at the reading of its last open day, until the range moves past that day. Only gh_repo carries the fork and archived flags and this store cannot join one measurement to another, so the rows the SQL dashboards leave out are listed here.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -5812,6 +5840,18 @@
                   {
                     "id": "custom.width",
                     "value": 160
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Fork"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 70
                   }
                 ]
               },
@@ -6260,7 +6300,7 @@
       "panels": [
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "How many runs the range holds and how they ended. The success rate is the runs that succeeded as a share of the runs that succeeded or failed: a run canceled by a newer push under a concurrency group, or skipped by its own condition, decided nothing and is counted beside it as undecided rather than as a failure. The run duration is the median over the range and the queue wait is the time a job spent waiting for a runner, which only exists at job level, the run-level number folding the wait into the duration. Over the runs whose jobs were expanded, which is the newest runs of each sweep and, after a backfill, the ninety days GitHub keeps jobs for; not every run the run count includes. Last come the bytes the runs left behind. In Elasticsearch the success rate is the mean of the boolean `success` field over those runs, as a fraction.",
+          "description": "How many runs the range holds and how they ended. The success rate is the runs that succeeded as a share of the runs that succeeded or failed: a run canceled by a newer push under a concurrency group, or skipped by its own condition, decided nothing and is counted beside it as undecided rather than as a failure. The run duration is the median over the range and the queue wait is the time a job spent waiting for a runner, which only exists at job level, the run-level number folding the wait into the duration. Over the runs whose jobs were expanded, which is the newest runs of each sweep and, after a backfill, the ninety days GitHub keeps jobs for; not every run the run count includes. Last come the bytes the runs left behind, which are the artifacts the walk reached: GitHub lists thousands of them per repository and the walk stops at five hundred, so this is a floor wherever it did. \"Artifact storage counted\" below puts the two counts beside it. In Elasticsearch the success rate is the mean of the boolean `success` field over those runs, as a fraction.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -6345,7 +6385,7 @@
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Artifact storage"
+                  "options": "Artifact storage walked"
                 },
                 "properties": [
                   {
@@ -6434,7 +6474,7 @@
                 "properties": [
                   {
                     "id": "displayName",
-                    "value": "Artifact storage"
+                    "value": "Artifact storage walked"
                   }
                 ]
               },
@@ -7098,7 +7138,7 @@
         },
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "Artifacts that have not expired. GitHub deletes them on their own schedule, which is why this falls without anyone doing anything. A reading taken at each sweep, so the curve starts the day the collector did: there is no history of it to rebuild. The eight repositories holding the most are named; the rest are `other`. One bar is one bucket, and the bucket widens with the range: a day over a month, a week over a year.",
+          "description": "Artifacts that have not expired, over the ones the walk reached, which is a floor on any repository with more than five hundred: \"Artifact storage counted\" further down has the counts that say which those are. GitHub deletes artifacts on their own schedule, which is why this falls without anyone doing anything. A reading taken at each sweep, so the curve starts the day the collector did: there is no history of it to rebuild. The eight repositories holding the most are named; the rest are `other`. One bar is one bucket, and the bucket widens with the range: a day over a month, a week over a year.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -8352,7 +8392,7 @@
         },
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "Artifact storage, and how much of it was counted. When Walked is lower than Declared, the live size is a floor rather than a total: the walk stopped at the page cap. Here it is short by a factor of fifty six, and without this column the tile above would say so nowhere.",
+          "description": "Artifact storage, and how much of it was counted. Three counts, because the live size is on neither of the other two: Declared is GitHub's own total and counts the artifacts it has already expired, Walked is how far the page cap let the walk go, and Live is the artifacts still held among those, which is what the live size is the size of. When Walked is lower than Declared the live size is a floor rather than a total: here it is short by a factor of fifty six, and without these columns the tile above would say so nowhere.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -8405,6 +8445,18 @@
                     "value": 100
                   }
                 ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Live"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
               }
             ]
           },
@@ -8455,6 +8507,7 @@
                     "metrics": [
                       "count",
                       "walked",
+                      "live_count",
                       "live_bytes"
                     ],
                     "order": "desc",
@@ -8478,6 +8531,7 @@
                 "renameByName": {
                   "Top Metrics count": "Declared",
                   "Top Metrics live_bytes": "Live size",
+                  "Top Metrics live_count": "Live",
                   "Top Metrics walked": "Walked",
                   "repo.keyword": "Repository"
                 }
@@ -10297,7 +10351,7 @@
         },
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "Whether a fork was ever pushed to separates a derivative from a bookmark, which most forks are.",
+          "description": "Whether a fork was ever pushed to separates a derivative from a bookmark, which most forks are. Idle is the time since that push, counted from the row's own date, so it is right when the panel is drawn rather than when the last sweep ran. Elasticsearch lists the documents themselves and cannot subtract the row's own date from now, so the column is how long after the fork its last push came. A negative is a fork nobody has pushed to, which inherits the parent's own last push and is most of them; Pushed to says the same thing as a word.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -10347,11 +10401,11 @@
                 "properties": [
                   {
                     "id": "unit",
-                    "value": "d"
+                    "value": "s"
                   },
                   {
                     "id": "custom.width",
-                    "value": 100
+                    "value": 90
                   }
                 ]
               },
@@ -10370,6 +10424,22 @@
                         "url": "${__data.fields.Link}"
                       }
                     ]
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Pushed after"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "s"
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 110
                   }
                 ]
               },
@@ -10436,24 +10506,24 @@
                   "@timestamp": true,
                   "advanced": true,
                   "by": true,
-                  "days_since_push": true,
                   "repo": true,
+                  "seconds_to_push": true,
                   "url": true
                 },
                 "indexByName": {
                   "@timestamp": 0,
                   "advanced": 3,
                   "by": 1,
-                  "days_since_push": 4,
                   "repo": 2,
+                  "seconds_to_push": 4,
                   "url": 5
                 },
                 "renameByName": {
                   "@timestamp": "Forked",
                   "advanced": "Pushed to",
                   "by": "By",
-                  "days_since_push": "Idle",
                   "repo": "Repository",
+                  "seconds_to_push": "Pushed after",
                   "url": "Link"
                 }
               }
@@ -11052,7 +11122,7 @@
             {
               "bucketAggs": [
                 {
-                  "field": "repo.keyword",
+                  "field": "full_name.keyword",
                   "id": "250",
                   "settings": {
                     "min_doc_count": "1",
@@ -11084,7 +11154,7 @@
                 "indexByName": {},
                 "renameByName": {
                   "Count": "Comments",
-                  "repo.keyword": "Repository"
+                  "full_name.keyword": "Repository"
                 }
               }
             }
@@ -11176,7 +11246,7 @@
             {
               "bucketAggs": [
                 {
-                  "field": "repo.keyword",
+                  "field": "full_name.keyword",
                   "id": "252",
                   "settings": {
                     "min_doc_count": "1",
@@ -11220,7 +11290,7 @@
                   "Count": "Comments",
                   "Sum answers": "Accepted answers",
                   "Sum upvotes": "Upvotes",
-                  "repo.keyword": "Repository"
+                  "full_name.keyword": "Repository"
                 }
               }
             }
@@ -11405,22 +11475,22 @@
                 "excludeByName": {},
                 "includeByName": {
                   "@timestamp": true,
+                  "full_name": true,
                   "is_answer": true,
-                  "repo": true,
                   "title": true,
                   "url": true
                 },
                 "indexByName": {
                   "@timestamp": 1,
+                  "full_name": 2,
                   "is_answer": 3,
-                  "repo": 2,
                   "title": 0,
                   "url": 4
                 },
                 "renameByName": {
                   "@timestamp": "When",
+                  "full_name": "Repository",
                   "is_answer": "Accepted",
-                  "repo": "Repository",
                   "title": "Title",
                   "url": "Link"
                 }
@@ -12575,7 +12645,7 @@
         },
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "Nothing else answers which branches were abandoned: GitHub's own branch list is ordered by name and keeps no history. The refs come back unordered and capped at a hundred per repository, so `gh_repo_total.branches` is the true count and is what makes the truncation visible. The repository picker holds every repository the account can see, its forks and its archived ones alongside its own, so a count here is over all of them until the picker is narrowed. Of the 1,208 branches in the picker when this was measured, 1,083 were a fork's; gh_branch carries no fork tag, so narrowing the picker is the only way to read this as the account's own branches. Elasticsearch answers with the largest number of days inside the range rather than with the newest reading. A branch whose ref points at something that is not a commit has no age at all, in this dashboard or any of the others, and its cell is empty.",
+          "description": "Nothing else answers which branches were abandoned: GitHub's own branch list is ordered by name and keeps no history. The refs come back unordered and capped at a hundred per repository, so `gh_repo_total.branches` is the true count and is what makes the truncation visible. The account's own live repositories only: a branch of a fork is the upstream project's history and not the account's, and a branch of an archived repository can be neither pushed to nor deleted. Of the 1,208 branches in the picker when this was measured, 1,083 were a fork's and those are the rows this leaves out. Elasticsearch answers with the largest number of days inside the range rather than with the newest reading. A branch whose ref points at something that is not a commit has no age at all, in this dashboard or any of the others, and its cell is empty. Only gh_repo carries the fork and archived flags and this store cannot join one measurement to another, so the rows the SQL dashboards leave out are listed here.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -15579,7 +15649,7 @@
         },
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "Dependabot alerts that were fixed or dismissed, newest first, with the advisory each one was and how long it stayed open. The score is there because the word rounds it away: one alert in the measured account scores 9.3 under a word whose mean is 6.1. It is the v4 score where the advisory carries one. In Elasticsearch this lists the newest 500 documents and the panel sorts them.",
+          "description": "Dependabot alerts that were fixed or dismissed, newest first, with the advisory each one was and how long it stayed open. Outcome is which of the two it was, read from the alert's own state rather than from the reason it was dismissed: an account that has only ever fixed its alerts has never written such a reason, and a column these stores were never given does not exist to be selected. The score is there because the word rounds it away: one alert in the measured account scores 9.3 under a word whose mean is 6.1. It is the v4 score where the advisory carries one. In Elasticsearch this lists the newest 500 documents and the panel sorts them.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -15660,7 +15730,7 @@
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Dismissed"
+                  "options": "Outcome"
                 },
                 "properties": [
                   {
@@ -15769,9 +15839,9 @@
                 "excludeByName": {},
                 "includeByName": {
                   "@timestamp": true,
+                  "alert_state": true,
                   "cvss": true,
                   "cvss_v4": true,
-                  "dismissed_reason": true,
                   "package": true,
                   "repo": true,
                   "seconds_to_resolve": true,
@@ -15781,9 +15851,9 @@
                 },
                 "indexByName": {
                   "@timestamp": 0,
+                  "alert_state": 7,
                   "cvss": 6,
                   "cvss_v4": 5,
-                  "dismissed_reason": 7,
                   "package": 3,
                   "repo": 1,
                   "seconds_to_resolve": 8,
@@ -15793,9 +15863,9 @@
                 },
                 "renameByName": {
                   "@timestamp": "Raised",
+                  "alert_state": "Outcome",
                   "cvss": "CVSS",
                   "cvss_v4": "CVSS v4",
-                  "dismissed_reason": "Dismissed",
                   "package": "Package",
                   "repo": "Repository",
                   "seconds_to_resolve": "Time to resolve",
@@ -15982,7 +16052,7 @@
         },
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "The two counts at the top of the section, as the rows they are made of, whatever the dashboard range: an alert is listed while it is open, however long ago it was raised. A Dependabot alert names its package and advisory, a code scanning alert its rule and tool. Open for is the newest reading, so the row moves forward every sweep until the alert is fixed or dismissed. The link opens the alert, which GitHub shows to the owner alone. Elasticsearch lists the Dependabot alerts alone, the two families being two indices, and by number rather than by date: the advisory is text, which a bucket cannot show. It also lists only the ones raised inside the dashboard range, since every Elasticsearch query is bounded by it.",
+          "description": "The two counts at the top of the section, as the rows they are made of, whatever the dashboard range: an alert is listed while it is open, however long ago it was raised. A Dependabot alert names its package and advisory, a code scanning alert its rule and tool. Open for is counted from the row's own date to now, so it is right when the panel is drawn rather than when the last sweep ran. The link opens the alert, which GitHub shows to the owner alone. Elasticsearch lists the Dependabot alerts alone, the two families being two indices, and the advisory is text, which a bucket cannot show. It gives the date each alert was raised rather than how long it has been open, that being the row's own date subtracted from now and not something a bucket can compute, and it is not sorted by that date: ordering a bucket by a metric needs the metric to be its own child, and this one is four buckets deeper. It also lists only the ones raised inside the dashboard range, since every Elasticsearch query is bounded by it.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -16190,9 +16260,9 @@
               "datasource": "${DS_ELASTICSEARCH}",
               "metrics": [
                 {
-                  "field": "seconds_open",
+                  "field": "@timestamp",
                   "id": "373",
-                  "type": "max"
+                  "type": "min"
                 }
               ],
               "query": "_index:ghchronicle-gh_dependabot_alert_item AND repo.keyword:${repo:lucene} AND alert_state:open",
@@ -16208,7 +16278,7 @@
                 "excludeByName": {},
                 "indexByName": {},
                 "renameByName": {
-                  "Max": "Open for",
+                  "Min": "Raised",
                   "number.keyword": "Number",
                   "package.keyword": "What",
                   "repo.keyword": "Repository",
@@ -17553,7 +17623,7 @@
                   "type": "sum"
                 }
               ],
-              "query": "_index:ghchronicle-gh_billing_usage AND _exists_:repo",
+              "query": "_index:ghchronicle-gh_billing_usage AND NOT repo.keyword:\"(none)\"",
               "refId": "A",
               "timeField": "@timestamp"
             }
@@ -17745,7 +17815,7 @@
         },
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "GitHub caps a repository at ten gigabytes and evicts the least recently used entry past it. Three repositories here are over the line and are throwing caches away on every run; the panel above says which key goes.",
+          "description": "GitHub caps a repository at ten gigabytes and evicts the least recently used entry past it. The bar is each repository's cache against that cap, so one that has reached the red end is throwing caches away on every run and the panel above says which key goes.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -18141,7 +18211,7 @@
             {
               "bucketAggs": [
                 {
-                  "field": "repo.keyword",
+                  "field": "full_name.keyword",
                   "id": "424",
                   "settings": {
                     "min_doc_count": "1",
@@ -18174,7 +18244,7 @@
                 "indexByName": {},
                 "renameByName": {
                   "Sum": "Events",
-                  "repo.keyword": "Repository"
+                  "full_name.keyword": "Repository"
                 }
               }
             }
@@ -18581,27 +18651,27 @@
                 "excludeByName": {},
                 "includeByName": {
                   "@timestamp": true,
+                  "full_name": true,
                   "notifications": true,
                   "reason": true,
-                  "repo": true,
                   "subject_type": true,
                   "title": true,
                   "url": true
                 },
                 "indexByName": {
                   "@timestamp": 0,
+                  "full_name": 1,
                   "notifications": 5,
                   "reason": 3,
-                  "repo": 1,
                   "subject_type": 2,
                   "title": 4,
                   "url": 6
                 },
                 "renameByName": {
                   "@timestamp": "Updated",
+                  "full_name": "Repository",
                   "notifications": "Updates",
                   "reason": "Reason",
-                  "repo": "Repository",
                   "subject_type": "Kind",
                   "title": "Title",
                   "url": "Link"
@@ -18787,8 +18857,8 @@
                 "includeByName": {
                   "@timestamp": true,
                   "comments": true,
+                  "full_name": true,
                   "kind": true,
-                  "repo": true,
                   "state": true,
                   "title": true,
                   "url": true
@@ -18796,8 +18866,8 @@
                 "indexByName": {
                   "@timestamp": 0,
                   "comments": 5,
+                  "full_name": 1,
                   "kind": 2,
-                  "repo": 1,
                   "state": 3,
                   "title": 4,
                   "url": 6
@@ -18805,8 +18875,8 @@
                 "renameByName": {
                   "@timestamp": "Seen",
                   "comments": "Comments",
+                  "full_name": "Repository",
                   "kind": "Kind",
-                  "repo": "Repository",
                   "state": "State",
                   "title": "Title",
                   "url": "Link"
@@ -19063,22 +19133,22 @@
                 "excludeByName": {},
                 "includeByName": {
                   "@timestamp": true,
+                  "full_name": true,
                   "language": true,
-                  "repo": true,
                   "repo_stars": true,
                   "url": true
                 },
                 "indexByName": {
                   "@timestamp": 0,
+                  "full_name": 1,
                   "language": 2,
-                  "repo": 1,
                   "repo_stars": 3,
                   "url": 4
                 },
                 "renameByName": {
                   "@timestamp": "When",
+                  "full_name": "Repository",
                   "language": "Language",
-                  "repo": "Repository",
                   "repo_stars": "Its stars",
                   "url": "Link"
                 }
@@ -22931,7 +23001,7 @@
         },
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "What the profile shows first, in the order it shows it. The row worth seeing is a pinned repository nobody has pushed to in two years. Position is a field and not a tag on purpose: a repository that moves from slot two to slot three is the same pin, and as a tag every rearrangement would fork the series. The repository filter at the top of the dashboard does not reach this panel, because a pin is named owner/name, or is a gist, and the variable holds neither. Elasticsearch takes the newest position of each pin, and the largest stars and idle days inside the range rather than the newest ones, because a gist carries neither field and only an aggregation that can answer null keeps its row. Stars only grow, so the largest is the current count. Idle days reset to 0 on a push, so a pin that was pushed to inside the range still reads as idle here until the range has rolled past the push.",
+          "description": "What the profile shows first, in the order it shows it. The row worth seeing is a pinned repository nobody has pushed to in two years. Position is a field and not a tag on purpose: a repository that moves from slot two to slot three is the same pin, and as a tag every rearrangement would fork the series. The repository filter at the top of the dashboard does not reach this panel, because a pin can be a gist, which is named by its hash and is in no repository the filter knows. Elasticsearch takes the newest position of each pin, and the largest stars and idle days inside the range rather than the newest ones, because a gist carries neither field and only an aggregation that can answer null keeps its row. Stars only grow, so the largest is the current count. Idle days reset to 0 on a push, so a pin that was pushed to inside the range still reads as idle here until the range has rolled past the push.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -24083,11 +24153,11 @@
         "x": 0,
         "y": 726
       },
-      "id": 169,
+      "id": 171,
       "panels": [
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "The share of each bucket spent, which puts a bucket of five thousand and one of fifteen thousand on the same axis. The buckets worth watching, which are the ones with more than thirty requests in them: search has thirty a minute and would flatten the axis. A bucket this account never touched is left out of the chart entirely, since its flat zero was still a legend entry; \"Every bucket\" beside this lists all eleven, and a Most used of 0 is where that absence belongs. A reading taken at each sweep, so the curve starts the day the collector did. One bar is one bucket, and the bucket widens with the range: a day over a month, a week over a year. In Elasticsearch each point is the largest reading of its five minutes.",
+          "description": "The share of each bucket spent, which puts a bucket of five thousand and one of fifteen thousand on the same axis. The buckets worth watching, which are the ones with more than thirty requests in them: search has thirty a minute and would flatten the axis. A bucket this account never touched is left out of the chart entirely, since its flat zero was still a legend entry; \"Every bucket\" beside this lists every one of them, and a Most used of 0 is where that absence belongs. A reading taken at each sweep, so the curve starts the day the collector did. One bar is one bucket, and the bucket widens with the range: a day over a month, a week over a year. In Elasticsearch each point is the largest reading of its five minutes.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -24178,7 +24248,7 @@
         },
         {
           "datasource": "${DS_ELASTICSEARCH}",
-          "description": "Fifteen buckets, and the one that runs out first decides what a sweep can collect. Reading them costs nothing: GET /rate_limit is free.",
+          "description": "Every budget GitHub reports, and the one that runs out first decides what a sweep can collect. Reading them costs nothing: GET /rate_limit is free.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -24265,6 +24335,319 @@
                   "Top Metrics remaining": "Lowest remaining",
                   "Top Metrics used": "Most used",
                   "resource.keyword": "Bucket"
+                }
+              }
+            }
+          ],
+          "type": "table"
+        },
+        {
+          "datasource": "${DS_ELASTICSEARCH}",
+          "description": "Every collector that ran in the range, with what stopped it where something did, how many sweeps it ran in, and how many repositories it was asked about. A family with no row here did not run at all, which is the one thing an empty panel could never say: not due, switched off, or skipped because a rate budget was spent. Why is what separates the two kinds of failure that would otherwise read alike: a search budget spent twice a day sorts apart from the 502 that cost a repository its history, and a family that had both has a row for each. Failures is the sweep's own count, so a family that failed on some of its repositories and was still marked as having run says so here; a batched query that failed names no repository and counts as one. One row here is not a family: `discover` is the repository listing, which every family depends on, and it appears only when it failed, because a listing that worked is stated by every other row of the same sweep. No repository filter: these rows belong to the collector rather than to a repository.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "filterable": false,
+                "minWidth": 90
+              },
+              "fieldMinMax": true
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Failures"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "mode": "gradient",
+                      "type": "gauge"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "min",
+                    "value": 0
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 100
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Why"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Sweeps"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 80
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Repositories"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 100
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 738
+          },
+          "id": 169,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": true,
+                "displayName": "Failures"
+              }
+            ]
+          },
+          "targets": [
+            {
+              "bucketAggs": [
+                {
+                  "field": "family.keyword",
+                  "id": "543",
+                  "settings": {
+                    "min_doc_count": "1",
+                    "order": "desc",
+                    "orderBy": "_count",
+                    "size": "40"
+                  },
+                  "type": "terms"
+                },
+                {
+                  "field": "reason.keyword",
+                  "id": "544",
+                  "settings": {
+                    "min_doc_count": "1",
+                    "order": "desc",
+                    "orderBy": "_count",
+                    "size": "20"
+                  },
+                  "type": "terms"
+                }
+              ],
+              "datasource": "${DS_ELASTICSEARCH}",
+              "metrics": [
+                {
+                  "field": "failed",
+                  "id": "545",
+                  "type": "sum"
+                },
+                {
+                  "id": "546",
+                  "type": "count"
+                },
+                {
+                  "field": "repos",
+                  "id": "547",
+                  "type": "max"
+                }
+              ],
+              "query": "_index:ghchronicle-gh_collector_family AND scope.keyword:\"family\"",
+              "refId": "A",
+              "timeField": "@timestamp"
+            }
+          ],
+          "title": "Every family",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {},
+                "indexByName": {},
+                "renameByName": {
+                  "Count": "Sweeps",
+                  "Max": "Repositories",
+                  "Sum": "Failures",
+                  "family.keyword": "Family",
+                  "reason.keyword": "Why"
+                }
+              }
+            }
+          ],
+          "type": "table"
+        },
+        {
+          "datasource": "${DS_ELASTICSEARCH}",
+          "description": "One row per repository one collector could not collect, newest first: which family, which repository, and what GitHub answered. This is where an empty row of the dashboard gets its explanation. Measured on this account on 2026-09-16, before there was anything to read it from: five repositories held no workflow run or job at all, each because one call for the jobs of one run had answered 502 once, and the Continuous integration row was drawn over an account missing its five busiest repositories. An empty table is the good case. No repository filter: a repository a sweep could not collect may be one the filter does not list, since the filter is built from rows the same sweep writes. In Elasticsearch this lists the newest 100 documents and the panel sorts them.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "filterable": false,
+                "minWidth": 90
+              },
+              "fieldMinMax": true
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "When"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "time: YYYY-MM-DD HH:mm"
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 135
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Repository"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Why"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 12,
+            "y": 738
+          },
+          "id": 170,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "showHeader": true,
+            "sortBy": []
+          },
+          "targets": [
+            {
+              "bucketAggs": [],
+              "datasource": "${DS_ELASTICSEARCH}",
+              "metrics": [
+                {
+                  "id": "548",
+                  "settings": {
+                    "order": "desc",
+                    "size": "100",
+                    "useTimeRange": true
+                  },
+                  "type": "raw_data"
+                }
+              ],
+              "query": "_index:ghchronicle-gh_collector_family AND scope.keyword:\"repo\"",
+              "refId": "A",
+              "timeField": "@timestamp"
+            }
+          ],
+          "title": "What failed, and where",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {},
+                "includeByName": {
+                  "@timestamp": true,
+                  "error": true,
+                  "family": true,
+                  "reason": true,
+                  "repo": true
+                },
+                "indexByName": {
+                  "@timestamp": 0,
+                  "error": 4,
+                  "family": 1,
+                  "reason": 3,
+                  "repo": 2
+                },
+                "renameByName": {
+                  "@timestamp": "When",
+                  "error": "What GitHub said",
+                  "family": "Family",
+                  "reason": "Why",
+                  "repo": "Repository"
                 }
               }
             }

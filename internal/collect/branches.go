@@ -130,10 +130,7 @@ func (b Branches) Collect(ctx context.Context, c *ghapi.Client, now time.Time) (
 			points = append(points, inv.points(repo, now, day)...)
 		}
 	}
-	if len(points) == 0 && failed != nil {
-		return nil, failed
-	}
-	return points, nil
+	return points, failed
 }
 
 // points renders one row per branch, stamped at the start of the UTC day.
@@ -143,7 +140,7 @@ func (b Branches) Collect(ctx context.Context, c *ghapi.Client, now time.Time) (
 // commit it happens to point at today would scatter the same branch across
 // the year and make "how many branches are stale right now" unanswerable.
 func (inv *branchInventory) points(repo Repo, now, day time.Time) []sink.Point {
-	base := map[string]string{"owner": repo.Owner, "repo": repo.Name, "full_name": repo.FullName}
+	base := repoTags(repo.Owner, repo.Name)
 	var def string
 	if inv.DefaultBranchRef != nil {
 		def = inv.DefaultBranchRef.Name

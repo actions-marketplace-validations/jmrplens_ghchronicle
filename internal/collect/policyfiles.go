@@ -135,10 +135,7 @@ func (pf PolicyFiles) Collect(ctx context.Context, c *ghapi.Client, now time.Tim
 	err := aliasBatch(ctx, c, pf.Repos, pf.Batch, build, func(repo Repo, node map[string]json.RawMessage) {
 		points = append(points, policyPoints(repo, parsePolicyResponse(node), now)...)
 	})
-	if len(points) == 0 && err != nil {
-		return nil, err
-	}
-	return points, nil
+	return points, err
 }
 
 // policyFragment writes the fragment once for the paths in policyFileSet.
@@ -183,7 +180,7 @@ func policyPaths() []flatPath {
 }
 
 func policyPoints(repo Repo, res policyResponse, now time.Time) []sink.Point {
-	base := map[string]string{"owner": repo.Owner, "repo": repo.Name, "full_name": repo.FullName}
+	base := repoTags(repo.Owner, repo.Name)
 	blobs := readPolicyBlobs(res)
 
 	var points []sink.Point

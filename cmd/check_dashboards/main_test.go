@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jmrplens/ghchronicle/cmd/internal/dashboards"
+	"github.com/jmrplens/ghchronicle/internal/dashboards"
 	"github.com/jmrplens/ghchronicle/internal/grafana"
 )
 
@@ -458,5 +458,99 @@ func TestVarsExpandsTheTimeMacroOnlyForInfluxDB(t *testing.T) {
 					v.AllValue, v.TimeFilter, v.TimeFilterFormat, ".*", tc.filter, tc.filterFormat)
 			}
 		})
+	}
+}
+
+// TestARefusedColumnIsReportedApartFromAnAbsentTable: the run against the
+// owner's own store on 2026-09-17 reported 34 failing panels under one word,
+// 33 of them families the backfill had not reached and one a panel asking for
+// a column that account will never have. A releaser reading "34 failing" has
+// no way to tell the gap that fills itself from the panel nobody can draw, so
+// the two are counted and named apart above the tally.
+func TestARefusedColumnIsReportedApartFromAnAbsentTable(t *testing.T) {
+	serve(t, func(q map[string]any) ([]column, string) {
+		sql, _ := q["rawSql"].(string)
+		switch {
+		case sql == repoListSQL:
+			return one("octocat/hello-world"), ""
+		case strings.Contains(sql, "FROM gh_dependabot_alert_item"):
+			return nil, "Schema error: No field named dismissed_reason. Valid fields are " +
+				"gh_dependabot_alert_item.alert_state, gh_dependabot_alert_item.alerts."
+		case strings.Contains(sql, "FROM gh_commit "):
+			return nil, "table 'public.iox.gh_commit' not found"
+		}
+		return columnsOf(q), ""
+	})
+	status, stdout, _ := checkRun(t, "influxdb", "influx-uid")
+	if status != 1 {
+		t.Fatalf("status %d, want a refused panel to fail the run", status)
+	}
+	for _, want := range []string{
+		"name a column this store has not created",
+		"Time to resolve an alert",
+		"waiting on a table this store has not created",
+		"WAIT Commits:",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("the run does not say %q:\n%s", want, stdout)
+		}
+	}
+	// The tally stays the last line, since that is what a long run is read by,
+	// and it counts the refused columns and not the absent tables.
+	if !strings.HasSuffix(stdout, "\n2 failing, 0 empty\n") {
+		t.Errorf("stdout ends %q, want a tally counting the two refused columns alone",
+			stdout[max(0, len(stdout)-40):])
+	}
+}
+
+// TestATableTheStoreHasNotCreatedDoesNotFailTheRun: the release step is a
+// checklist item, so its status has to mean something. Against the production
+// store on 2026-09-17 thirty-three panels named a family the backfill had not
+// reached and one named a column that account will never have, and the command
+// exited 1 for both, which is how an item becomes a thing people tick. A store
+// that is merely incomplete now passes.
+func TestATableTheStoreHasNotCreatedDoesNotFailTheRun(t *testing.T) {
+	serve(t, func(q map[string]any) ([]column, string) {
+		sql, _ := q["rawSql"].(string)
+		switch {
+		case sql == repoListSQL:
+			return one("octocat/hello-world"), ""
+		case strings.Contains(sql, "FROM gh_commit "):
+			return nil, "table 'public.iox.gh_commit' not found"
+		}
+		return columnsOf(q), ""
+	})
+	status, stdout, _ := checkRun(t, "influxdb", "influx-uid")
+	if status != 0 {
+		t.Errorf("status %d, want a store whose backfill is still walking to pass:\n%s",
+			status, stdout)
+	}
+	if !strings.Contains(stdout, "they do not fail the run") ||
+		!strings.HasSuffix(stdout, "\n0 failing, 0 empty\n") {
+		t.Errorf("the run does not report the waiting panels apart from the failures:\n%s", stdout)
+	}
+}
+
+// TestEveryStoreSpellingOfAMissingColumnIsRecognised: each store words it
+// differently, and PostgreSQL words a missing table and a missing column
+// almost alike, both ending in "does not exist", so the table spellings are
+// tried first.
+func TestEveryStoreSpellingOfAMissingColumnIsRecognised(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		err  string
+		want failureKind
+	}{
+		{"Schema error: No field named dismissed_reason.", missingColumn},
+		{`pq: column "dismissed_reason" does not exist`, missingColumn},
+		{"table 'public.iox.gh_commit' not found", missingTable},
+		{`pq: relation "gh_commit" does not exist`, missingTable},
+		{"index_not_found_exception", missingTable},
+		{"parse error: unexpected }", otherFailure},
+		{"context deadline exceeded", otherFailure},
+	} {
+		if got := classify(c.err); got != c.want {
+			t.Errorf("%q was read as %d, want %d", c.err, got, c.want)
+		}
 	}
 }

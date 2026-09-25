@@ -47,7 +47,7 @@ import (
 // questions.
 
 // The committed dashboards are the subject rather than the builder in
-// cmd/internal/dashboards: they are the files a user imports, nothing outside
+// internal/dashboards: they are the files a user imports, nothing outside
 // cmd/ may import that package, and `make check-dashboards` already fails when
 // the two disagree.
 const dashboardsDir = "../../../dashboards"
@@ -713,7 +713,7 @@ func dashboardFrameAnswer(frame map[string]any) (values int, numbers []float64, 
 //     item with no way to open it. The GraphQL query asks every pull request
 //     for `url` and the two REST walks read `html_url`, so all three were the
 //     fixture answering without a field GitHub always sends. gh_fork.url on
-//     panel 102 was the sixth, closed on 2026-09-11 when the newest hundred
+//     panel 102 was the sixth, closed when the newest hundred
 //     forks moved into the audience batch: its fixture answers `url`, and the
 //     REST fixture gained `html_url` so the two roads could be held to the
 //     same rows;
@@ -743,7 +743,7 @@ func dashboardFrameAnswer(frame map[string]any) (values int, numbers []float64, 
 //     measurement is written from the repository list the sweep discovers, so
 //     it needs `targets.include_archived`, and this sweep's config leaves it
 //     off. The fixture does hold an archived repository, octocat/linguist,
-//     archivedAt 2026-08-29, and with that setting off it is never asked
+//     archived a fortnight back, and with that setting off it is never asked
 //     about. An account running the default filter is in exactly the same
 //     position, which is why the panel's own description names the setting.
 //   - gh_dependency and gh_dependency_change are the eighth and ninth, beside
@@ -952,6 +952,12 @@ var dashboardKnownEmpty = map[string]map[int]string{
 		55:  "every workflow run in the fixture succeeded, and the panel wants the ones that fail",
 		104: "the Dependabot alert inside the range is open, so it has no seconds_to_resolve",
 		137: "one sweep is one snapshot, and the panel counts the values that changed between two",
+		// The good case, and the one the panel is built to draw rather than
+		// be refused for: the family rows of gh_collector_family are written
+		// every sweep whether or not anything failed, so the measurement and
+		// every column of it exist, and a sweep that lost no repository draws
+		// an empty list instead of a planner error.
+		153: "nothing failed in the sweep, and this panel lists the repositories a collector could not collect",
 	},
 	"postgres": {
 		55:  "every workflow run in the fixture succeeded, and the panel wants the ones that fail",
@@ -959,20 +965,25 @@ var dashboardKnownEmpty = map[string]map[int]string{
 		96:  "one sweep is one snapshot, and the panel is the difference between two download counts",
 		104: "the Dependabot alert inside the range is open, so it has no seconds_to_resolve",
 		137: "one sweep is one snapshot, and the panel counts the values that changed between two",
+		153: "nothing failed in the sweep, and this panel lists the repositories a collector could not collect",
 	},
 	"graphite": {
 		96:  "one sweep is one snapshot, and the panel is the difference between two download counts",
 		103: "every code scanning alert here is open, so no seconds_to_resolve was ever written",
 		104: "the Dependabot alert inside the range is open, so it has no seconds_to_resolve",
+		153: "nothing failed in the sweep, and this panel lists the repositories a collector could not collect",
 	},
 	// Prometheus lists only the panels that ask for something the exporter
 	// publishes right now and still get nothing. Everything else this dashboard
 	// leaves empty is derived by promNeedsHistory below, because the reason is
 	// the same for all of them and it is a property of the harness.
-	"prometheus": {},
+	"prometheus": {
+		153: "nothing failed in the sweep, and this panel lists the repositories a collector could not collect",
+	},
 	"elasticsearch": {
 		103: "every code scanning alert here is open, so no seconds_to_resolve was ever written",
 		104: "the Dependabot alert inside the range is open, so it has no seconds_to_resolve",
+		153: "nothing failed in the sweep, and this panel lists the repositories a collector could not collect",
 	},
 }
 

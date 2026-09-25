@@ -184,12 +184,13 @@ func TestActionsDoesNotListTheJobsOfARunAlreadyWritten(t *testing.T) {
 	}
 }
 
-// TestActionsForgetTheRunsOfASweepThatFailed: the runner keeps nothing of a
-// collector that returned an error, so a run remembered before the error
-// would have its jobs neither written nor listed again. The memory is
-// written only once the whole collection succeeded, whether the failure is
-// a job listing after the first or the cache totals after every run.
-func TestActionsForgetTheRunsOfASweepThatFailed(t *testing.T) {
+// TestASweepThatFailedKeepsTheJobsItHadAlreadyCollected is the collector's
+// half of the defect a real store showed: one 502 on one run's job listing
+// used to cost a repository every run and job the family had already
+// rendered. The rows come back with the error now, so the runs behind them
+// are remembered too: they have been written, and listing them again next
+// sweep is the round trip the memory exists to save.
+func TestASweepThatFailedKeepsTheJobsItHadAlreadyCollected(t *testing.T) {
 	t.Parallel()
 	f := newFixtureServer(t)
 	f.file("/repos/octocat/hello-world/actions/runs", "actions_runs.json")
@@ -199,26 +200,34 @@ func TestActionsForgetTheRunsOfASweepThatFailed(t *testing.T) {
 	expanded := map[RunKey]struct{}{}
 	sweep := Actions{Jobs: true, Expanded: expanded, Walk: Walk{Pages: 1}}
 
-	if _, err := sweep.Collect(ctx(t), f.Client, testRepo, testNow); err == nil {
+	points, err := sweep.Collect(ctx(t), f.Client, testRepo, testNow)
+	if err == nil {
 		t.Fatal("a job listing answered 502 and the sweep did not fail")
 	}
-	if len(expanded) != 0 {
-		t.Errorf("a sweep that failed remembered %v; its points were never written", expanded)
+	if len(only(t, points, "gh_workflow_job")) == 0 {
+		t.Error("the 502 on the second run threw away the jobs of the first")
+	}
+	if _, kept := expanded[RunKey{ID: 1000163135, Attempt: 1}]; !kept || len(expanded) != 1 {
+		t.Errorf("remembered %v, want the one run whose jobs were written", expanded)
 	}
 
-	// Every job listing answers now and the cache totals do not: the runs
-	// were all expanded, and the runner still throws the whole answer away.
+	// Every job listing answers now and the cache totals do not: the two runs
+	// left are expanded, and their rows survive the later failure as well.
 	f.file("/repos/octocat/hello-world/actions/runs/1000163134/jobs", "actions_jobs.json")
 	f.status("/repos/octocat/hello-world/actions/cache/usage", http.StatusBadGateway, "boom")
-	if _, err := sweep.Collect(ctx(t), f.Client, testRepo, testNow); err == nil {
+	points, err = sweep.Collect(ctx(t), f.Client, testRepo, testNow)
+	if err == nil {
 		t.Fatal("the cache totals answered 502 and the sweep did not fail")
 	}
-	if len(expanded) != 0 {
-		t.Errorf("a sweep that failed after its runs remembered %v", expanded)
+	if len(only(t, points, "gh_workflow_run")) == 0 {
+		t.Error("the 502 on the cache totals threw away the runs collected before it")
+	}
+	if len(expanded) != 3 {
+		t.Errorf("remembered %d runs after the cache failed, want the 3 that were written", len(expanded))
 	}
 
 	f.file("/repos/octocat/hello-world/actions/cache/usage", "actions_cache.json")
-	if _, err := sweep.Collect(ctx(t), f.Client, testRepo, testNow); err != nil {
+	if _, err = sweep.Collect(ctx(t), f.Client, testRepo, testNow); err != nil {
 		t.Fatal(err)
 	}
 	if len(expanded) != 3 {
@@ -683,6 +692,14 @@ func TestArtifactsWalkedVersusCount(t *testing.T) {
 	if fieldInt(t, total, "live_bytes") != 100*1000 {
 		t.Errorf("live_bytes = %v, only the unexpired half of 200 artifacts at 1000 bytes", total.Fields["live_bytes"])
 	}
+	// The size travels with the count it is the size of. Without it a panel
+	// reads a floor over 200 walked artifacts beside a declared 350 that
+	// counts the expired ones too, and nothing says the two are different
+	// denominators.
+	if fieldInt(t, total, "live_count") != 100 {
+		t.Errorf("live_count = %v, want the 100 unexpired artifacts live_bytes adds up", total.Fields["live_count"])
+	}
+
 	if !total.Time.Equal(testNow) {
 		t.Errorf("the total is current state and must be stamped now, got %s", total.Time)
 	}
@@ -703,6 +720,10 @@ func TestArtifactsShortPageEndsTheWalk(t *testing.T) {
 	total := only(t, points, "gh_artifact_total")[0]
 	if fieldInt(t, total, "count") != 2 || fieldInt(t, total, "walked") != 2 || fieldInt(t, total, "live_bytes") != 204800 {
 		t.Errorf("total = %v", total.Fields)
+	}
+	// Everything GitHub declared was walked, so the live figures are totals.
+	if fieldInt(t, total, "live_count") != 1 {
+		t.Errorf("total = %v, want the one live artifact", total.Fields)
 	}
 	live := find(t, points, "gh_artifact", map[string]string{"artifact": "coverage"})
 	checkArtifactDemotedTags(t, live)
@@ -773,6 +794,9 @@ func TestArtifactsDisabledStillWritesATotal(t *testing.T) {
 	total := only(t, points, "gh_artifact_total")[0]
 	if fieldInt(t, total, "count") != 0 || fieldInt(t, total, "walked") != 0 {
 		t.Errorf("total = %v", total.Fields)
+	}
+	if fieldInt(t, total, "live_count") != 0 {
+		t.Errorf("total = %v, want nothing live", total.Fields)
 	}
 }
 

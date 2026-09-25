@@ -1,12 +1,12 @@
 ---
 title: What they show
-description: The seventeen sections and their one hundred and fifty two panels, one capture each, and what changes when the store cannot answer.
+description: The seventeen sections and their one hundred and fifty four panels, one capture each, and what changes when the store cannot answer.
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
 One dashboard, rendered once per store. Seventeen sections, one hundred and
-fifty two panels, in the same places with the same titles whichever database
+fifty four panels, in the same places with the same titles whichever database
 you chose. One capture per section below, in the order the dashboard puts them.
 
 Every section but the Overview opens collapsed. Open, the first seven were
@@ -36,7 +36,7 @@ than all of them.
 A masthead rather than a panel: the mark, large and centered, the name under
 it, and under the name a button to this documentation and one to the source,
 on the page itself with no box around them. Then four groups of numbers: Repositories (repositories, stars,
-forks), Traffic in range (views, unique visitors, clones), Community
+forks), Traffic in range (views, unique visitors, unique cloners), Community
 (followers, following, sponsors, sponsoring) and Account (contributions in the
 last year, account age, watching, stars given, gists, packages). A group is one
 stat panel of several values rather than a tile per number: on a desktop it
@@ -48,6 +48,14 @@ range, because both are current state and a sum over the range would count
 every sweep.
 
 ![The Overview row: the repository picker and the 90 day range across the top, the ghchronicle badge with its Docs and Source buttons, then four tile groups reading 5 repositories with 350 stars and 51 forks, 37.5 thousand views with 21.1 thousand unique visitors and 19.6 thousand clones, 117 followers and 58 following with 4 sponsors and 2 sponsored, and an account with 3.22 thousand contributions over 7.78 years](../../../assets/dashboards/overview.png)
+
+The third traffic tile counts the people who cloned and not the clones.
+Continuous integration clones all day, so the clone count belongs beside the
+figure that explains it rather than in a headline: measured on the account this
+was read against, one repository was cloned 135,683 times in a fortnight by
+1,807 cloners, and 186 K beside 2.89 K views reads as an audience. The count
+itself is two panels of the Audience section. The capture above predates that
+change and still reads "clones".
 
 Reads `gh_account`, `gh_repo`, `gh_traffic` and `gh_contributions_total`.
 
@@ -68,6 +76,15 @@ running total kept by this tool would not be. It is also the shape a store can
 answer without reading everything it holds: InfluxDB 3 Core refuses a query
 that would open more than its file limit, forty thousand where this was
 measured, and "how many ever" from a row per fact is exactly that query.
+
+"Every repository, ever" lists every repository the picker holds, forks and
+archived ones included, since that is what the title says. It is ranked by
+commits, which on an account with forks of busy projects means somebody else's
+history outranks everything the account wrote: 370,296 commits against 3,385
+where this was read. So the fork and archived flags are columns, and the table
+opens sorted by the first of them and then by commits, which puts the account's
+own repositories on the first screen and the forks under them without leaving
+one out.
 
 Reads `gh_account_total` and `gh_repo_total`.
 
@@ -158,7 +175,7 @@ Reads `gh_contribution_day`, `gh_commits_week`, `gh_contributions_total`,
 ## Pull requests and issues
 
 Fourteen panels, and the section where the per-item collection pays for itself.
-Merged count, time to merge, time to first review, issues closed, time to close
+Merged count, time to merge, time to review by someone else, issues closed, time to close
 and lines changed as one group of six values; then the same split by state over
 time, the largest merged pull requests, and the breakdowns by author, by
 repository and by reviewer. An item still open is written once per day for as
@@ -169,12 +186,31 @@ each item from its newest row.
 
 ![The Pull requests and issues section: a tile group reading 467 pull requests merged, 10.3 hours to merge, 9.81 hours to a first review, 137 issues closed, 1.75 days to close one and 75 lines per pull request, pull requests and issues per day split by state, time to merge and pull request size over time, the largest merged pull requests with their titles, associations and labels, pull requests by author, the per repository table, the reviewer table led by review-bot at 209 reviews, reviews per day, the two open the longest tables, review threads per day split into bot and human, and the review debt table](../../../assets/dashboards/pull-requests-and-issues.png)
 
-<Aside type="caution" title="Read the time to first review carefully">
+<Aside type="caution" title="Read the review wait carefully">
   The tile counts the first review by somebody other than the author and other
-  than a bot, so on an account reviewed by bots alone it reads No data rather
-  than the bots' few seconds. Measured, nine pull requests in ten had a bot
-  review inside a minute; the Reviewers table shows that, with each bot marked
+  than a bot, so on an account reviewed by bots alone it reads "no human
+  review" rather than the bots' few seconds. It is named for that, because "Time to first
+  review" over No data read as nothing having been reviewed at all: measured
+  here on 2026-09-17, 703 of 825 pull requests in a fortnight had a first
+  review and none of them had one from anybody else, and the field holds
+  fourteen rows in the whole store. Nine pull requests in ten had a bot review
+  inside a minute; the Reviewers table shows that, with each bot marked
   as one and the author's own replies as one row.
+</Aside>
+
+<Aside type="note" title="The lists of what to do next leave out what cannot be done">
+  "Open the longest", "Open issues the longest", "Workflows that never ran" and
+  "Stale branches" are the four panels that read as a queue of work. On an
+  account with 17 archived repositories and 22 forks of other people's
+  projects, all four were won by rows nothing can be done to: the eight oldest
+  open pull requests were dependabot's in two archived repositories, every
+  workflow that had never run was in an archived one, and 1,083 of 1,208
+  branches were a fork's. So the two SQL dashboards join each row's repository
+  to `gh_repo`, the one measurement carrying the fork and archived flags, and
+  leave the archived out of the first three and both the archived and the forks
+  out of the branches; the first three keep a Fork column, because a fork's
+  pull request is still one that can be merged. Prometheus, Graphite and
+  Elasticsearch have no join, so there the rows stay and each panel says so.
 </Aside>
 
 Reads `gh_pull_request`, `gh_pull_request_review` and `gh_issue`.
@@ -205,7 +241,12 @@ that only the two SQL stores can answer.
 
 "Artifact storage counted" exists because the total is a floor. GitHub reports how many artifacts a repository has, the collector
 records how many it actually walked, and when the second is smaller the live
-size is short: on one repository here, by a factor of fifty six.
+size is short: on one repository here, by a factor of fifty six. It carries a
+third count, the live artifacts among the ones walked, because GitHub's own
+total includes the ones it has already expired and the size does not. The tile
+at the top of the section is named for what it is over, and every panel that
+shows the size either shows those counts or says in its description that it is
+a floor.
 
 Reads `gh_workflow_run`, `gh_workflow_job`, `gh_workflow_step`, `gh_workflow`,
 `gh_artifact`, `gh_artifact_total` and `gh_actions_cache`.
@@ -287,8 +328,8 @@ the host of a webhook URL is stored, because the path usually carries a secret.
 One panel is text in the exported files, "Where failure output went",
 because the output of a failed job is text and belongs in a log store, and an
 importer may have none: a dashboard bound to one datasource cannot query two.
-Published to a Grafana that has a Loki datasource, with
-`cmd/publish_dashboard -loki <datasource-uid>`, the same panel draws the last
+Published to a Grafana with a Loki datasource, which the collector makes from
+a Loki sink or takes from `grafana.datasource.loki_uid`, the same panel draws the last
 lines of every failed job from Loki instead, newest first, with the workflow,
 job and run of each line in its logfmt tail. The repository variable is applied
 in the InfluxDB, PostgreSQL and Prometheus dashboards; the Graphite and
@@ -363,7 +404,9 @@ credit shows up. The price per unit is in the table for the same reason: it is
 what explains thirty thousand macOS minutes costing more than two hundred and
 forty thousand Linux ones. A repository can appear in that table and in no
 other panel, because the list that bills and the list that is swept are not the
-same list.
+same list. A charge that belongs to no repository, which is what a Copilot seat
+is, is left out of that table in every store: it is a row of the bill and not a
+repository called (none). The spend totals above it include it.
 
 The two cache panels are about the ceiling. GitHub caps a repository at ten
 gigabytes and evicts the least recently used entry past it, so the bar is each
@@ -474,8 +517,8 @@ creation they would all fall outside every range and read as no tiers at all.
 Pinned items carry the position as a field and not a tag, because a repository
 that moves from slot two to slot three is the same pin, and as a tag every
 rearrangement would fork the series. The repository filter at the top of the
-dashboard does not reach that panel: a pin is named owner/name, or is a gist,
-and the variable holds neither.
+dashboard does not reach that panel: a pin can be a gist, which is named by its
+hash and is in no repository the filter knows.
 
 The achievements are read once a day from the public profile page, because no
 API lists them. Next tier at is the community-observed threshold
@@ -491,9 +534,10 @@ Reads `gh_sponsors_listing`, `gh_sponsorship`, `gh_sponsors_tier`,
 
 ## The collector itself
 
-What the collector has left to spend: the budget of each of GitHub's fifteen
-independent rate limits over time, and a table of all of them ordered by how
-much of each has been used.
+What the collector has left to spend and what it managed to do: the budget of
+each of GitHub's fifteen independent rate limits over time, a table of all of
+them ordered by how much of each has been used, and under those two the row's
+own report on the sweep.
 
 ![The collector itself section: the rate budget used per bucket over the range, and the table of every bucket with its limit, most used and lowest remaining, led by core at 3134 used of 5000 and 1866 left](../../../assets/dashboards/the-collector-itself.png)
 
@@ -503,7 +547,31 @@ this costs nothing: `GET /rate_limit` is the one endpoint GitHub does not
 charge for. Without it, a family skipped because a bucket was spent looks
 exactly like a family with nothing to report.
 
-Reads `gh_rate_limit`.
+"Every family" and "What failed, and where" are the two panels below them, and
+the capture above predates both. The first lists every collector that ran in
+the range, what stopped it where something did, how many sweeps it ran in and
+how many repositories it was asked about; a family with no row there did not run
+at all. The reason is a column of its own so that the two kinds of failure sort
+apart: a search budget spent twice a day is not the 502 that cost a repository
+its history, and a family that met both has a row for each. The second is one
+row per repository one collector could not collect, newest first, with what
+GitHub answered. An empty second table is the
+good case, and it is drawn empty rather than refused because the first table's
+rows are written every sweep whether or not anything failed, so the measurement
+behind both exists from the first one.
+
+They are there because of a failure this page could not explain. On 2026-09-16
+five repositories of this account held no workflow run or job at all, each
+because one call for the jobs of one run had answered `502` once and the
+collector had thrown away everything it had gathered for that repository. The
+Continuous integration row was drawn over an account missing its five busiest
+repositories while the Cost row on the same page reported one of them burning
+27.6 K macOS minutes. Neither panel takes the repository variable: the family
+rows belong to no repository, and a repository a sweep could not collect may be
+one the variable does not list, since the variable is built from rows the same
+sweep writes.
+
+Reads `gh_rate_limit` and `gh_collector_family`.
 
 ## The Link column
 

@@ -12,6 +12,39 @@ silicon and Intel. macOS is not a build target that is merely compiled and
 hoped for: every change runs the whole unit suite and the end-to-end suite on a
 macOS runner, beside Linux and Windows.
 
+## The one-line install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.sh | bash
+```
+
+It works out the architecture, takes the newest release, checks the archive
+against the checksum that release published, and puts the binary in
+`/usr/local/bin` when that is writable. When it is not, it takes the first of
+`~/.local/bin` and `~/bin` that exists and is already on your `PATH`, and falls
+back to `~/.local/bin` when neither is. A checksum that does not match stops it
+without installing anything, and there is no flag to skip that step. When
+`cosign` is already on the machine it also verifies that the checksum file
+itself came from the release workflow. It ends by running what it installed, so
+the version you see is the file it just wrote, and it says so when another
+`ghchronicle` earlier in your `PATH` still wins the name.
+
+Pin a version, or choose where it goes:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.sh | VERSION=__VERSION__ BIN_DIR=~/bin bash
+```
+
+<Aside type="note" title="Reading it first is the whole point of a short script">
+  Piping anything into a shell means running whatever that URL answers with
+  today. `curl -fsSL <url> -o install.sh`, read it, then `bash install.sh`: it
+  is the same script, and it is short enough to read.
+</Aside>
+
+The rest of this page is that same install done by hand, which is what to
+follow when you want to know exactly what landed where, or when you would
+rather not run a script you did not write.
+
 ## Pick the archive
 
 Release archives say `darwin`, which is the name of the system the Go toolchain
@@ -24,16 +57,16 @@ architecture.
 | `x86_64`           | Intel              | `darwin_amd64`      |
 
 ```sh
-VERSION=1.0.0
+VERSION=__VERSION__
 arch=$(uname -m); case "$arch" in x86_64) arch=amd64 ;; esac
 base=https://github.com/jmrplens/ghchronicle/releases/download/v$VERSION
 curl -fsSLO "$base/ghchronicle_${VERSION}_darwin_${arch}.tar.gz"
 ```
 
 <Aside type="caution" title="Name the version rather than asking for the newest">
-  The repository publishes a moving `v1` tag beside the numbered releases,
+  The repository publishes a moving major tag beside the numbered releases,
   because the Action is listed on the Marketplace and that listing needs one.
-  The `v1` release carries **no files at all**, so never build a download URL
+  That tag's release carries **no files at all**, so never build a download URL
   from the major tag: there is nothing behind it to download. Take the version
   from the
   [releases page](https://github.com/jmrplens/ghchronicle/releases) and write
@@ -64,7 +97,7 @@ signature over that file.
     ```
 
     ```text
-    ghchronicle_1.0.0_darwin_arm64.tar.gz: OK
+    ghchronicle___VERSION___darwin_arm64.tar.gz: OK
     ```
 
 3. Check the checksum file itself, if you have
@@ -89,13 +122,24 @@ recorded in a public transparency log, which is why the two `--certificate`
 flags are not optional. Without them cosign would confirm that somebody signed
 the file, which is not the question.
 
+Then let it write the configuration:
+
+```sh
+ghchronicle -setup
+```
+
+It asks for a token and where the numbers go, checks each answer against the
+thing it names, and writes a `config.yaml` and, if you want one, a launchd
+agent in `~/Library/LaunchAgents`. The installer above offers to run it as its
+last step.
+
 ## Put it on the PATH
 
 The archive holds three files and no directory.
 
 <FileTree>
 
-- ghchronicle_1.0.0_darwin_arm64.tar.gz
+- ghchronicle_VERSION_darwin_ARCH.tar.gz
   - ghchronicle the binary
   - LICENSE
   - README.md
@@ -105,7 +149,7 @@ The archive holds three files and no directory.
 <Tabs syncKey="macos-scope">
   <TabItem label="For everyone">
     ```sh
-    tar -xzf ghchronicle_1.0.0_darwin_arm64.tar.gz ghchronicle
+    tar -xzf "ghchronicle_${VERSION}_darwin_${arch}.tar.gz" ghchronicle
     sudo install -m 755 ghchronicle /usr/local/bin/
     ghchronicle -version
     ```
@@ -117,7 +161,7 @@ The archive holds three files and no directory.
   <TabItem label="For one account">
     ```sh
     mkdir -p ~/bin
-    tar -xzf ghchronicle_1.0.0_darwin_arm64.tar.gz -C ~/bin ghchronicle
+    tar -xzf "ghchronicle_${VERSION}_darwin_${arch}.tar.gz" -C ~/bin ghchronicle
     chmod 755 ~/bin/ghchronicle
     echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zprofile
     ```
@@ -140,7 +184,7 @@ The archive holds three files and no directory.
   extracts. So look before you clear anything:
 
   ```sh
-  xattr -l ghchronicle_1.0.0_darwin_arm64.tar.gz   # what a browser marked
+  xattr -l "ghchronicle_${VERSION}_darwin_${arch}.tar.gz"  # what a browser marked
   xattr -l ghchronicle                             # the extracted binary
   xattr -c ghchronicle                             # clear it
   ```

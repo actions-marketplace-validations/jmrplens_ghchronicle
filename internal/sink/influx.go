@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/jmrplens/ghchronicle/internal/httpx"
 )
 
 // Influx writes line protocol to InfluxDB 2 or 3 over the v2 write endpoint.
@@ -41,14 +43,18 @@ func NewInflux(url, token, org, bucket string, batch int, timeout time.Duration)
 	}
 	return &Influx{
 		URL: strings.TrimRight(url, "/"), Token: token, Org: org, Bucket: bucket,
-		Batch: batch, client: &http.Client{Timeout: timeout},
+		Batch: batch, client: &http.Client{Timeout: timeout, Transport: httpx.OwnTransport()},
 	}
 }
 
 func (i *Influx) Name() string { return "influxdb" }
 func (i *Influx) Close() error { return nil }
 
-func (i *Influx) Write(ctx context.Context, points []Point) error {
+// Write posts the points as line protocol. Two kinds never reach the database
+// and neither is counted as written: a measurement named by Exclude, and a
+// point carrying no field the line protocol can render. A line the server
+// refuses to parse is not counted either, since one line is one point here.
+func (i *Influx) Write(ctx context.Context, points []Point) (int, error) {
 	lines := make([]string, 0, len(points))
 	for _, p := range points {
 		if i.Exclude[p.Measurement] {
@@ -58,31 +64,33 @@ func (i *Influx) Write(ctx context.Context, points []Point) error {
 			lines = append(lines, l)
 		}
 	}
-	rejected := 0
+	written, rejected := 0, 0
 	for start := 0; start < len(lines); start += i.Batch {
 		end := min(start+i.Batch, len(lines))
 		batch := lines[start:end]
 		err := i.post(ctx, strings.Join(batch, "\n"))
 		if err == nil {
+			written += len(batch)
 			continue
 		}
 		if !isParseRejection(err) {
-			return err
+			return written, err
 		}
 		// One unparseable line makes InfluxDB refuse the whole write, and the
 		// message names no line. Rather than lose several thousand good points
 		// to one bad one, the batch is halved until the offender is alone, and
 		// it is then reported by content so the bug can be fixed at the source.
 		n, rerr := i.bisect(ctx, batch)
+		written += len(batch) - n
 		if rerr != nil {
-			return rerr
+			return written, rerr
 		}
 		rejected += n
 	}
 	if rejected > 0 {
-		return &RejectedError{N: rejected}
+		return written, &RejectedError{N: rejected}
 	}
-	return nil
+	return written, nil
 }
 
 // RejectedError reports lines the server refused to parse. Everything else was
@@ -147,7 +155,13 @@ func (i *Influx) post(ctx context.Context, body string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Token "+i.Token)
+	// Only when there is one. A server started with --without-auth, which is
+	// what a local stack does so that nobody has to create a token before the
+	// first write, refuses "Token " with nothing after it as a malformed
+	// header rather than reading it as no credential at all.
+	if i.Token != "" {
+		req.Header.Set("Authorization", "Token "+i.Token)
+	}
 	req.Header.Set("Content-Type", "text/plain; charset=utf-8")
 
 	resp, err := i.client.Do(req)

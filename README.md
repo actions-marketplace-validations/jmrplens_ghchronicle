@@ -29,8 +29,40 @@ is archived anywhere unless you archive it.
 as a dated point, so a year from now the question "how fast were we merging in
 July" still has an answer.
 
+## Start
+
+Two commands on a machine of your own:
+
 ```sh
-ghchronicle -config config.yaml
+curl -fsSL https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.sh | bash
+ghchronicle -setup
+```
+
+The first takes the newest release and refuses anything whose checksum is not
+the one the release published. The second asks what a working configuration
+needs, checks each answer against the thing it names, and writes it: a token
+that cannot read the account says so there, not at the first sweep. It offers
+to set up a service too, and the installer offers to run it for you.
+
+On Windows, `irm https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.ps1 | iex`
+and then the same `-setup`.
+
+Or with Docker, where the whole stack comes up together:
+
+```sh
+# compose.yaml from https://jmrp.io/docs/ghchronicle/install/docker/
+printf 'GITHUB_TOKEN=github_pat_...\nGITHUB_USER=your-login\n' > .env
+docker compose up -d
+```
+
+Grafana is on `http://localhost:3000` with the dashboard already in it: the
+collector publishes it on start and points it at the store beside it, so there
+is nothing to import and no datasource to fill in. The
+[Docker page](https://jmrp.io/docs/ghchronicle/install/docker/) has one compose
+file per store, each brought up against the real images before a release.
+
+```sh
+ghchronicle -config config.yaml    # what the service ends up running
 ```
 
 ## What it draws
@@ -75,7 +107,7 @@ each one draws and how to put one in a profile README.
 The full documentation is at
 **<https://jmrp.io/docs/ghchronicle/>**, in English and Spanish:
 [quickstart](https://jmrp.io/docs/ghchronicle/start/quickstart/),
-[the 91 measurements](https://jmrp.io/docs/ghchronicle/collectors/measurements/),
+[the 92 measurements](https://jmrp.io/docs/ghchronicle/collectors/measurements/),
 [choosing a store](https://jmrp.io/docs/ghchronicle/sinks/),
 [the cost of a sweep](https://jmrp.io/docs/ghchronicle/api/cost/) and
 [troubleshooting](https://jmrp.io/docs/ghchronicle/reference/troubleshooting/).
@@ -83,43 +115,46 @@ Every page also serves itself as markdown at its own path with `index.md` on
 the end, and [llms.txt](https://jmrp.io/docs/ghchronicle/llms.txt) indexes the
 lot. The copies under [docs/](docs/README.md) are generated from those pages.
 
+[CHANGELOG.md](CHANGELOG.md) says what changed in each release and what was
+left unproven; the notes on each tag say what landed.
+
 ## What it collects
 
-Ninety-one measurements across thirty-four families, covering every surface
+Ninety-two measurements across thirty-four families, covering every surface
 a personal or organisation account exposes.
 
-| Area | What is kept |
-|---|---|
-| Traffic | Views, unique visitors and clones per day, referrers and paths. GitHub's window is 14 days; this rewrites it whole on every sweep, so a collector that was down for a day repairs itself on the next run |
-| Stars | One point per star, dated when it was given. The full stargazer walk happens once per repository; after that the newest hundred ride in one GraphQL query per ten repositories |
-| Repositories | Stars, forks, watchers, open issues, size, age, idle days, licence, visibility, languages by bytes, topics, community profile score |
-| Releases | Downloads per release and per asset, asset sizes, draft and prerelease state |
-| Pull requests | Per item: time to first review, time to merge, lines added and deleted, files changed, review rounds, comments, commits |
-| Issues | Per item: time to close, comments, reactions, label count |
-| Actions | Runs with duration and queue time, jobs, individual steps, workflows and their state, artifacts and their expiry, cache usage |
-| Security | Dependabot and code scanning alerts by severity, plus an explicit record of which features are switched on, so no data is distinguishable from no alerts |
-| Contributions | The whole profile calendar, one point per day at that day's date, plus totals and the per-repository commit breakdown |
-| Activity | The event feed and the notification inbox, both of which GitHub discards quickly |
-| Billing | Usage per day, product, SKU and repository, with gross, discount and net |
-| Account | Followers, following, packages, gists, social accounts, sponsors |
+| Area          | What is kept                                                                                                                                                                                             |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Traffic       | Views, unique visitors and clones per day, referrers and paths. GitHub's window is 14 days; this rewrites it whole on every sweep, so a collector that was down for a day repairs itself on the next run |
+| Stars         | One point per star, dated when it was given. The full stargazer walk happens once per repository; after that the newest hundred ride in one GraphQL query per ten repositories                           |
+| Repositories  | Stars, forks, watchers, open issues, size, age, idle days, licence, visibility, languages by bytes, topics, community profile score                                                                      |
+| Releases      | Downloads per release and per asset, asset sizes, draft and prerelease state                                                                                                                             |
+| Pull requests | Per item: time to first review, time to merge, lines added and deleted, files changed, review rounds, comments, commits                                                                                  |
+| Issues        | Per item: time to close, comments, reactions, label count                                                                                                                                                |
+| Actions       | Runs with duration and queue time, jobs, individual steps, workflows and their state, artifacts and their expiry, cache usage                                                                            |
+| Security      | Dependabot and code scanning alerts by severity, plus an explicit record of which features are switched on, so no data is distinguishable from no alerts                                                 |
+| Contributions | The whole profile calendar, one point per day at that day's date, plus totals and the per-repository commit breakdown                                                                                    |
+| Activity      | The event feed and the notification inbox, both of which GitHub discards quickly                                                                                                                         |
+| Billing       | Usage per day, product, SKU and repository, with gross, discount and net                                                                                                                                 |
+| Account       | Followers, following, packages, gists, social accounts, sponsors                                                                                                                                         |
 
 ## Where it writes
 
-Ten destinations, and more than one at a time is the normal arrangement. Everything
+Eleven destinations, and more than one at a time is the normal arrangement. Everything
 is pushed: nothing here needs to be scraped, so the collector runs wherever it
 can reach its databases.
 
-| Store | Keeps | Good for |
-|---|---|---|
-| InfluxDB | the dated history | "how fast were we merging in July" |
-| PostgreSQL / TimescaleDB | the dated history, as SQL you pipe into `psql` | a Grafana user who has a Postgres and no InfluxDB |
-| Graphite | the dated history | an existing Graphite |
-| Elasticsearch / OpenSearch | the dated history, as documents | search across everything collected |
-| Prometheus | the current value | alerting, and a number on a wall |
-| OpenTelemetry | either, depending on the backend | an existing collector pipeline |
-| Loki | the events, as log lines | "what happened, in order" |
-| Telegraf | whatever Telegraf can reach | Kafka, Graphite, Datadog, anything with a Telegraf output |
-| File and stdout | line protocol or JSON | a shipper you already run, and a durable buffer |
+| Store                      | Keeps                                          | Good for                                                  |
+| -------------------------- | ---------------------------------------------- | --------------------------------------------------------- |
+| InfluxDB                   | the dated history                              | "how fast were we merging in July"                        |
+| PostgreSQL / TimescaleDB   | the dated history, as SQL you pipe into `psql` | a Grafana user who has a Postgres and no InfluxDB         |
+| Graphite                   | the dated history                              | an existing Graphite                                      |
+| Elasticsearch / OpenSearch | the dated history, as documents                | search across everything collected                        |
+| Prometheus                 | the current value                              | alerting, and a number on a wall                          |
+| OpenTelemetry              | either, depending on the backend               | an existing collector pipeline                            |
+| Loki                       | the events, as log lines                       | "what happened, in order"                                 |
+| Telegraf                   | whatever Telegraf can reach                    | Kafka, Graphite, Datadog, anything with a Telegraf output |
+| File and stdout            | line protocol or JSON                          | a shipper you already run, and a durable buffer           |
 
 The difference that decides which to use is dating. InfluxDB keys a point by
 measurement, tag set and timestamp, so replaying the same fourteen-day traffic
@@ -143,7 +178,10 @@ Import from the Grafana UI (Dashboards, New, Import) or with the API. They are
 generated from one specification by the scripts beside them; edit those rather
 than the JSON.
 
-## Install
+## The other ways in
+
+[Start](#start) is the short one. The rest, for a machine where it does not
+apply. Build it yourself:
 
 ```sh
 go install github.com/jmrplens/ghchronicle/cmd/ghchronicle@latest
@@ -233,6 +271,12 @@ A backfill is the opposite intention and says so: `-backfill` walks every
 surface to the end, bounded by a date you choose or by nothing at all, and when
 a bucket runs out it waits for the window to reset rather than giving up.
 
+A backfill that GitHub cuts short is not thrown away. It keeps a checkpoint of
+what each family covered, `-backfill-status` reads that checkpoint and prints
+what is left without asking GitHub anything, and `-backfill-retry 1h` goes back
+an hour later for the families still missing, until a pass records nothing new
+or ten of them have run.
+
 Three things cannot be backfilled at any price, and the documentation says so
 rather than letting you find out: the event feed keeps three hundred events,
 traffic is fourteen days, and job logs are deleted after ninety.
@@ -272,7 +316,7 @@ the fastest. `0` is not a still card, `-card-motion off` is.
 The repository ships as a composite Action:
 
 ```yaml
-- uses: jmrplens/ghchronicle@v1
+- uses: jmrplens/ghchronicle@v2
   with:
     token: ${{ secrets.GHCHRONICLE_TOKEN }}
     mode: card

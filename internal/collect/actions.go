@@ -147,13 +147,25 @@ func actorTag(r *runRow) string {
 }
 
 func (a Actions) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now time.Time) ([]sink.Point, error) {
-	base := map[string]string{"owner": repo.Owner, "repo": repo.Name, "full_name": repo.FullName}
+	base := repoTags(repo.Owner, repo.Name)
 
 	runs, declared, listed, err := a.runList(ctx, c, repo)
 	if err != nil {
 		return nil, err
 	}
 	points, expanded, err := a.runPoints(ctx, c, repo, runs, base)
+	// Remembered here, beside the points that carry those jobs, and not on
+	// the way out: the runner keeps what a collector that failed returned, so
+	// a run whose jobs are in points has been written whether or not a later
+	// call failed, and listing it again next sweep is the round trip this
+	// memory exists to save. It used to be remembered only once the whole
+	// collection had succeeded, which was right for as long as the runner
+	// threw a failed collector's points away.
+	if a.Expanded != nil {
+		for _, key := range expanded {
+			a.Expanded[key] = struct{}{}
+		}
+	}
 	if err != nil {
 		return points, err
 	}
@@ -170,20 +182,11 @@ func (a Actions) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now ti
 			Time:        now,
 		})
 	}
+	// The cache totals are the last call of the family and the least of it:
+	// a repository's whole run and job history is already in points, so a
+	// failure here goes back with them rather than instead of them.
 	cache, err := cachePoints(ctx, c, repo, base, now)
-	if err != nil {
-		return nil, err
-	}
-	// Remembered only now, with the whole collection in hand: the runner
-	// drops every point of a collector that returned an error, so a run
-	// remembered on the way to one would have its jobs neither written nor
-	// ever listed again.
-	if a.Expanded != nil {
-		for _, key := range expanded {
-			a.Expanded[key] = struct{}{}
-		}
-	}
-	return append(points, cache...), nil
+	return append(points, cache...), err
 }
 
 // runList walks the run listing newest first and says how many the repository
@@ -240,7 +243,9 @@ func (a Actions) runList(ctx context.Context, c *ghapi.Client, repo Repo) (all [
 
 // runPoints renders one point per finished run, and the jobs of as many of
 // them as the caller is willing to pay for. It also says which runs those
-// were, for Collect to remember once it knows the sweep kept the points.
+// were, for Collect to remember, and it says it on the failing path too: the
+// points rendered before the failure are kept, so the runs behind them have
+// been written.
 func (a Actions) runPoints(ctx context.Context, c *ghapi.Client, repo Repo, all []runRow, base map[string]string) (points []sink.Point, expanded []RunKey, err error) {
 	for i := range all {
 		r := &all[i]
@@ -252,7 +257,9 @@ func (a Actions) runPoints(ctx context.Context, c *ghapi.Client, repo Repo, all 
 		if a.Jobs && !written && (a.MaxJobRuns == 0 || len(expanded) < a.MaxJobRuns) {
 			jp, listErr := a.jobsFor(ctx, c, repo, r, base)
 			if listErr != nil {
-				return points, nil, listErr
+				// The runs and jobs already rendered go back with the error,
+				// and so do the runs they belong to: both are kept now.
+				return points, expanded, listErr
 			}
 			points = append(points, jp...)
 			// Counted even when the listing answered nothing, and so
@@ -378,7 +385,7 @@ func cachePoints(ctx context.Context, c *ghapi.Client, repo Repo, base map[strin
 			Time:        now,
 		})
 	case !isSkippable(err):
-		return nil, err
+		return points, err
 	}
 
 	var caches struct {
@@ -415,7 +422,9 @@ func cachePoints(ctx context.Context, c *ghapi.Client, repo Repo, base map[strin
 			})
 		}
 	case !isSkippable(err):
-		return nil, err
+		// The totals row above is already in hand, and the per-entry listing
+		// failing does not make it less true.
+		return points, err
 	}
 	return points, nil
 }
@@ -624,7 +633,7 @@ type artifactRow struct {
 }
 
 func (a Artifacts) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now time.Time) ([]sink.Point, error) {
-	base := map[string]string{"owner": repo.Owner, "repo": repo.Name, "full_name": repo.FullName}
+	base := repoTags(repo.Owner, repo.Name)
 	// Five pages, five hundred artifacts. Twenty pages across eighteen
 	// repositories was three hundred and sixty requests an hour on its own,
 	// which ate the rate budget the rest of the sweep needed. When a
@@ -634,7 +643,7 @@ func (a Artifacts) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now 
 
 	var points []sink.Point
 	var live int64
-	var walked, declared int
+	var liveCount, walked, declared int
 
 	// Paginated. Summing only the first hundred artifacts published a live
 	// total of three megabytes next to a count of twenty-eight thousand, which
@@ -660,6 +669,7 @@ func (a Artifacts) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now 
 			art := &res.Artifacts[i]
 			if !art.Expired {
 				live += art.SizeBytes
+				liveCount++
 			}
 			fields := map[string]any{
 				"size_bytes": art.SizeBytes,
@@ -713,15 +723,28 @@ func (a Artifacts) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now 
 
 	// One current total, so a dashboard can show storage without summing a
 	// window that would double-count artifacts still alive from earlier days.
+	//
+	// Three counts rather than one, because `live_bytes` and `count` are not
+	// on the same denominator and a reader has no way to tell. `count` is
+	// GitHub's own total and it counts expired artifacts: measured on
+	// jmrplens/jmrp.io on 2026-09-17, page 40 of the listing was expired
+	// artifacts to the last row, against a declared 29,405. `live_bytes` is
+	// the size of the artifacts GitHub still holds, over the ones this walk
+	// reached, which the page cap stops at five hundred. So the panel read
+	// 11.5 GB beside a count of 29,361 with nothing saying the two are
+	// counting different things. `live_count` gives the bytes the count they
+	// are the size of, and `walked` against `count` says whether that is a
+	// total or a floor.
 	points = append(points, sink.Point{
 		Measurement: "gh_artifact_total",
 		Tags:        base,
 		Fields: map[string]any{
 			"live_bytes": live, "count": declared,
-			// How many of the declared total were actually walked. When these
-			// two disagree the live figure is a floor, not a total, and the
-			// dashboard can say so instead of quietly lying.
+			// How many of the declared total were actually walked.
 			"walked": walked,
+			// The artifacts behind live_bytes: the walked ones GitHub has
+			// not expired.
+			"live_count": liveCount,
 		},
 		Time: now,
 	})

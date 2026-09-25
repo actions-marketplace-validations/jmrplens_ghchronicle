@@ -32,11 +32,26 @@ type Point struct {
 
 // Sink accepts dated points. Implementations must be safe for concurrent use.
 type Sink interface {
-	// Write sends one family's points. A *RejectedError or *DroppedError is
-	// a partial success: every point the store would accept was written, and
-	// the error counts the ones it would not; any other error is a failed
-	// write.
-	Write(ctx context.Context, points []Point) error
+	// Write sends one family's points and reports how many of them this sink
+	// took: wrote, buffered for a flush, or sent. A point the sink drops
+	// before the store ever sees it is not accepted, whatever the reason, and
+	// neither is one the store refused.
+	//
+	// The count is in the signature because no caller can work it out. Every
+	// sink here drops something inside this method and none of it is visible
+	// from outside: InfluxDB skips the measurements its exclude names, Loki
+	// keeps only the dozen measurements it has a rendering for, five more
+	// skip a point that renders no line, and the exporters skip a measurement
+	// with no rule. The runner used to log what it handed over as what was
+	// stored, and production read "points=440" for a measurement InfluxDB has
+	// never held a row of. A sink cannot report more than it took without
+	// saying so here.
+	//
+	// A *RejectedError or *DroppedError is a partial success: everything the
+	// store would accept was written and accepted counts it, the error counts
+	// the rest. Any other error is a failed write, and accepted says how much
+	// of the batch had already landed.
+	Write(ctx context.Context, points []Point) (accepted int, err error)
 	// Name identifies the sink in log lines, so an operator can tell which
 	// of several configured stores a warning is about.
 	Name() string

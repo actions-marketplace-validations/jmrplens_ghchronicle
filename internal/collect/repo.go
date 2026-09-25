@@ -64,7 +64,7 @@ var securitySettings = []string{
 }
 
 func (rc RepoCore) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now time.Time) ([]sink.Point, error) {
-	base := map[string]string{"owner": repo.Owner, "repo": repo.Name, "full_name": repo.FullName}
+	base := repoTags(repo.Owner, repo.Name)
 	var points []sink.Point
 
 	var r struct {
@@ -192,14 +192,11 @@ func (rc RepoCore) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now 
 			Measurement: "gh_repo_community", Tags: base, Fields: f, Time: now,
 		})
 	} else if !isSkippable(err) {
-		return nil, err
+		return points, err
 	}
 
 	rel, err := releasePoints(ctx, c, repo, base, now, rc.Walk)
-	if err != nil {
-		return nil, err
-	}
-	return append(points, rel...), nil
+	return append(points, rel...), err
 }
 
 func releasePoints(ctx context.Context, c *ghapi.Client, repo Repo, base map[string]string, now time.Time, w Walk) ([]sink.Point, error) {

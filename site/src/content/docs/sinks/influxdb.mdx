@@ -64,6 +64,19 @@ which is text meant for a log store: writing thousands of lines of build output
 into a metrics database is a lot of storage for something nobody will query as
 a number.
 
+An excluded measurement is still collected and still offered to this sink, so
+the sweep log says what the database took rather than what it was handed:
+
+```text
+level=INFO msg=written sink=influxdb family=joblogs points=0 unchanged=0 filtered=440
+```
+
+`filtered` here is a measurement named above, or a point carrying no field the
+line protocol can render. It is [the same key every sink
+uses](/ghchronicle/sinks/#what-the-written-line-counts). Until this was counted
+the line read `points=440` for a measurement the database has never held a row
+of.
+
 ## Column types are fixed on first sight
 
 <Aside type="danger" title="InfluxDB 3 will not let a name change side">

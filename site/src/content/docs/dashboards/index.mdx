@@ -31,6 +31,181 @@ documentation uses, `acme` and five repositories, described beside [what the
 panels show](/ghchronicle/dashboards/panels/). Every section but the Overview
 ships collapsed, which is why Lifetime is a header there.
 
+## Letting the binary do it
+
+The dashboard is built from the same code the binary carries, so the binary can
+publish it. Given a Grafana, it reconciles the datasource out of the sink it
+already writes to, asks that datasource whether it can actually be reached, and
+publishes the dashboard for every store it writes to.
+
+```yaml
+grafana:
+  url: http://localhost:3000
+  token: ${GRAFANA_TOKEN}
+```
+
+```sh
+ghchronicle -config config.yaml -publish-dashboard
+```
+
+It asks GitHub nothing, so it needs no GitHub token, and it prints what it did
+to each datasource and each dashboard.
+
+<Aside type="caution" title="A password from the machine is not copied">
+  pgx reads libpq's environment and its password file, which is what the sink
+  wants, because it is the thing connecting. A datasource is different: it is
+  written into a Grafana other people can see, so only a password the DSN
+  itself carries is sent. One that came from `PGPASSWORD` or a `.pgpass` on
+  whichever machine ran the publish is named in a line and left where it is.
+</Aside>
+
+<Aside type="note" title="What the token has to be allowed to do">
+  Publishing a dashboard needs an Editor. Creating or correcting a datasource
+  needs `datasources:create`, which an Editor does not have: a token without it
+  gets as far as the dashboard and is refused on the datasource, saying which
+  permission is missing. So a service account that manages its own datasource
+  is an Admin, or an Editor granted that permission; one that only publishes
+  against a datasource named in `grafana.datasource.uid` is an Editor, because
+  adopting reads and never writes.
+</Aside>
+
+<Aside type="caution" title="Grafana often reaches the store by another address">
+  The address the collector writes to and the address Grafana queries are
+  frequently not the same one: a collector on the host writes to a published
+  port while Grafana in a container reaches the same store by its name on the
+  container network. Copying the sink's address across produces a datasource
+  Grafana accepts and cannot use, so the run asks it before publishing and
+  refuses on a datasource that does not answer. `grafana.datasource.url` is the
+  address to use instead.
+</Aside>
+
+Three of the five sinks describe their own datasource with nothing else said,
+because what they write to is what Grafana queries: InfluxDB, Elasticsearch,
+and the PostgreSQL sink that connects, whose DSN carries the server, the
+database, the user and, when the DSN itself writes one, the password.
+
+Two more need the address and nothing else, because they write somewhere that
+is not where a query goes: the Prometheus sink is scraped rather than written
+to, and the Graphite sink speaks the ingest port while Grafana asks the web API
+on another port. Give those the address and the datasource is made the same
+way:
+
+```yaml
+grafana:
+  datasource:
+    url: http://prometheus:9090
+```
+
+What cannot be described at all is the SQL sink, the one that writes statements
+to a file: it never connects, so no host, port, user or password exists
+anywhere in its config. That one, and any datasource you would rather manage
+yourself, is named instead:
+
+```yaml
+grafana:
+  datasource:
+    uid: ae3x9k2
+```
+
+A datasource named that way is adopted and left exactly as it is, since
+correcting one this did not make would overwrite settings nobody asked it to
+have.
+
+`publish_on_start: true` does the same once when the collector starts, before
+the first sweep. It is off by default, and it is what keeps a server from
+quietly falling behind the binary feeding it: the dashboard is generated from
+the code, so updating the binary updates the dashboard. A failure there warns
+and the sweep goes on, because the metrics of an hour spent not running cannot
+be recovered and a dashboard published on the next restart can.
+
+### What it makes, and under which names
+
+Nothing here is assigned by Grafana, so there is nothing to read back out of it
+and write into your config. Both uids are worked out from the store's name, and
+the same run twice writes to the same two places:
+
+| Store           | Dashboard uid               | Its datasource                  |
+| --------------- | --------------------------- | ------------------------------- |
+| `influxdb`      | `ghchronicle-influxdb`      | made, from the sink             |
+| `elasticsearch` | `ghchronicle-elasticsearch` | made, from the sink             |
+| `postgres`      | `ghchronicle-postgres`      | made, from the dsn              |
+| `prometheus`    | `ghchronicle-prometheus`    | made, once you give the address |
+| `graphite`      | `ghchronicle-graphite`      | made, once you give the address |
+
+A datasource this makes takes the dashboard's uid, so both are
+`ghchronicle-<store>`, and one you name yourself keeps whatever uid it has.
+A Loki datasource, when the sink's address explains where to find one, is
+`ghchronicle-loki`.
+
+The datasource is created the first time and corrected afterwards, and only the
+fields this writes are compared, so a timeout or a description you set on it
+yourself is left alone. One carrying a credential is written on every run,
+because Grafana reports which secrets are set and never their values: a token
+you rotate in the config cannot be seen from the outside, and writing it is the
+only way to be sure the datasource is not still using the old one.
+
+The dashboard is published with `overwrite`, so the second run updates the first
+rather than adding another. That is what makes `publish_on_start` safe to leave
+on.
+
+A run also names what it finds under a uid it no longer writes to. Changing
+which store the collector feeds is the case that leaves one: the old store's
+dashboard and datasource stay where they are, pointing at something nobody
+fills, and the new store's uid is a different string, so nothing overwrites
+them. The note says which uid and which store, and stops there. Deleting a
+dashboard unasked is not something a collector should do, even one it made: it
+may be the copy still being read, or one edited since.
+
+### If the dashboard is already somewhere else
+
+Importing the JSON through the UI keeps the uid the file carries, so a dashboard
+imported that way is the one this writes over and there is nothing to do. It is
+only different if Grafana was asked to import it as new, or if the uid was
+changed by hand: then the generated uid is free, a publish makes a second
+dashboard beside the one being looked at, and the one open stops being the one
+updated. Name the existing one and it is written instead:
+
+```yaml
+grafana:
+  dashboard_uid: my-existing-dashboard
+```
+
+### Taking it all away again
+
+`-uninstall` removes what this put in place, and only that. It takes the list
+of what to remove, and without `-yes` it removes nothing and prints what it
+would, because the alternative is one typed command that empties a store.
+
+```sh
+ghchronicle -config config.yaml -uninstall all          # says what would go
+ghchronicle -config config.yaml -uninstall all -yes     # and then goes
+```
+
+| Target      | What goes                                                            |
+| ----------- | -------------------------------------------------------------------- |
+| `dashboard` | The dashboards it published, and a datasource it created              |
+| `data`      | Every table in the store whose name starts with `gh_`                 |
+| `state`     | The state file, the dedupe ledger and the backfill checkpoint         |
+| `all`       | The three above                                                       |
+
+A datasource named in `grafana.datasource.uid` is never removed: it was
+somebody else's before this ran and it stays theirs. A target it does not
+recognise is refused whole, rather than the rest of the list being carried out
+without it.
+
+The tables are asked of the store rather than compiled in. A list inside the
+binary would be the measurements this version writes, and the ones worth
+removing are exactly the ones nobody writes any more: what an older version
+collected, or a family switched off since. Asking finds those.
+
+Not every store can be emptied from here, and the ones that cannot say why
+rather than staying silent, which would read as nothing to remove. Graphite
+offers no delete, so its whisper files go by hand. The Prometheus sink is
+scraped rather than written to, so nothing was stored to remove. The SQL sink's
+file is removed, but rows already loaded from it into a real database were
+loaded by you and have to go there: this sink emits statements and never
+connects.
+
 ## Importing from the UI
 
 <Steps>
@@ -93,42 +268,15 @@ Grafana is fine, because the uids differ per store and cannot collide.
 
 ## They are generated, never hand-edited
 
-`cmd/internal/dashboards` holds one ordered list of sections and panels, and
-every panel carries one query set per store. The generator picks one set and
-emits the JSON, so every file has the same panels in the same places with the
-same titles, and it refuses to write files whose layouts have drifted apart.
+One list of sections and panels produces all five, so a panel that is fixed is
+fixed everywhere and a store that is added inherits the lot. What that means
+for you is the part worth knowing: a dashboard edited in Grafana is yours until
+the next publish overwrites it, so keep changes in a copy under a uid of your
+own and name it in `grafana.dashboard_uid`.
 
-```sh
-go run ./cmd/gen_dashboards          # writes all five files
-go run ./cmd/gen_dashboards -check   # writes nothing, fails if they are stale
-```
-
-Edit `cmd/internal/dashboards/sections_*.go`, not the JSON. `panels.go` holds
-the panel constructors it uses, `query.go` the query helpers for each store,
-and `stores.go` only chooses a query set and a datasource.
-
-<Aside type="note" title="No builder is trusted without running the queries">
-The raw database API accepts things the Grafana plugin then fails to render, so
-the checkers go through Grafana's own query path where a datasource exists.
-
-```sh
-GRAFANA_TOKEN=... go run ./cmd/check_dashboards influxdb <datasource-uid>
-GRAFANA_TOKEN=... go run ./cmd/check_prometheus <metrics-dump> <datasource-uid>
-go run ./cmd/check_postgres <schema.json>
-```
-
-`check_dashboards` reports every panel as ok, empty or failing.
-`check_prometheus` additionally checks each metric name against a live dump of
-the exporter's own `/metrics`, because a typo in a metric name is not a syntax
-error: PromQL parses it happily and returns nothing forever.
-
-Both of them, and `cmd/publish_dashboard`, read two variables: `GRAFANA_TOKEN`
-for the credential, and `GRAFANA_URL` for the server. The compiled-in default
-is `http://localhost:3000`, which is the address Grafana itself ships with, so
-anything else has to be named: the first symptom of not naming it is a
-connection refused.
-
-</Aside>
+How the generator works, and the checks that keep the committed files and the
+panels' own queries in step, are in
+[CONTRIBUTING](https://github.com/jmrplens/ghchronicle/blob/main/CONTRIBUTING.md).
 
 ## Publishing to the Grafana directory
 

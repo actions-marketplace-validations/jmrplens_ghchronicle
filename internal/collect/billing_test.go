@@ -44,13 +44,20 @@ func TestBillingParsesRFC3339Dates(t *testing.T) {
 	if copilot.Fields["net"] != 10.0 {
 		t.Errorf("net is not always zero, got %v", copilot.Fields["net"])
 	}
-	// A seat is charged to no repository, and a personal account belongs to no
-	// organization: measured on 2026-09-10, `org` was empty on all 937 rows of
-	// this account and `repo` on its three Copilot credit rows. Both tags are
-	// still written, because an empty tag value is dropped on the way into
-	// InfluxDB and those rows would land in a series of their own.
-	if copilot.Tags["repo"] != noneTag || copilot.Tags["org"] != noneTag {
-		t.Errorf("a charge that belongs to no repository still carries both tags, got %v", copilot.Tags)
+	// A seat is charged to no repository, so all three of the tags that name
+	// one say so rather than being left out: an empty tag value is dropped on
+	// the way into InfluxDB and those rows would land in a series of their own.
+	// Naming the account as the owner would be an invention, since the charge
+	// is not about a repository at all.
+	for _, tag := range []string{"owner", "repo", "full_name"} {
+		if copilot.Tags[tag] != noneTag {
+			t.Errorf("a charge that belongs to no repository names none of the three, got %v", copilot.Tags)
+		}
+	}
+	// `org` was the same dimension as `owner`, recorded where it could never
+	// arrive, so it is gone and `owner` carries it in every case.
+	if _, isTag := copilot.Tags["org"]; isTag {
+		t.Errorf("org is folded into owner, got %v", copilot.Tags)
 	}
 	checkBareDates(t, points)
 }
@@ -71,7 +78,13 @@ func checkActionsCharge(t *testing.T, points []sink.Point) {
 	// filter on `unit = 'Minutes'`. The fixture used to say "minutes", which
 	// made those panels answer nothing in the containerised suite and read as
 	// a defect in the panels for as long as it stood.
-	if actions.Tags["sku"] != "Actions Linux" || actions.Tags["unit"] != "Minutes" || actions.Tags["org"] != "octocat" || actions.Tags["user"] != "octocat" {
+	// This endpoint names no organization, so the owner of the repository that
+	// burned the minutes is the account the report was asked for. The fixture
+	// carries no organizationName for the same reason: the live endpoint sends
+	// none, and test data that claims otherwise is a claim about GitHub.
+	if actions.Tags["sku"] != "Actions Linux" || actions.Tags["unit"] != "Minutes" ||
+		actions.Tags["owner"] != "octocat" || actions.Tags["full_name"] != "octocat/hello-world" ||
+		actions.Tags["user"] != "octocat" {
 		t.Errorf("billing tags = %v", actions.Tags)
 	}
 	if actions.Fields["quantity"] != 214.0 || actions.Fields["gross"] != 1.712 || actions.Fields["discount"] != 1.712 || actions.Fields["net"] != 0.0 {
@@ -117,5 +130,32 @@ func TestBillingUnavailableMonthIsSkipped(t *testing.T) {
 	}
 	if n := len(f.calls("/users/octocat/settings/billing/usage")); n != 3 {
 		t.Errorf("made %d calls, want 3", n)
+	}
+}
+
+// TestABillingChargeIsOwnedByTheOrganizationWhenThereIsOne covers the branch
+// the fixture cannot reach any more.
+//
+// The user form of the usage report never names an organization, so the
+// collector's own fixture must not either. The organization form does, as a
+// required property naming the organization whose report was asked for, which
+// is the owner of every repository in it, and that is the branch tested here
+// directly rather than through a response GitHub does not send.
+func TestABillingChargeIsOwnedByTheOrganizationWhenThereIsOne(t *testing.T) {
+	t.Parallel()
+	got := billingRepoTags("octocat", "acme", "telemetry")
+	if got["owner"] != "acme" || got["repo"] != "telemetry" || got["full_name"] != "acme/telemetry" {
+		t.Errorf("tags = %v, want the organization as the owner", got)
+	}
+	got = billingRepoTags("octocat", "", "telemetry")
+	if got["owner"] != "octocat" || got["full_name"] != "octocat/telemetry" {
+		t.Errorf("tags = %v, want the billed account as the owner", got)
+	}
+	got = billingRepoTags("octocat", "", "")
+	for _, tag := range []string{"owner", "repo", "full_name"} {
+		if got[tag] != noneTag {
+			t.Errorf("a charge about no repository names none of the three, got %v", got)
+			break
+		}
 	}
 }

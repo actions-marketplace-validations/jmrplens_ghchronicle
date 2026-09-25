@@ -63,11 +63,18 @@ type rule struct {
 	labels []string
 }
 
+// The three tags that name a repository travel together wherever a rule keeps
+// one, the way gh_repo has always kept them. The short name is not an identity:
+// four of these reduce measurements that hold other people's repositories as
+// well as the account's own, and two owners can name a repository the same
+// thing, which by `repo` alone collapses into one series that is the sum of
+// two. They cost no extra series, since each of the three is decided by the
+// others, and they let a panel group by whichever one it means.
 var promRules = map[string]rule{
 	// Account-wide snapshots.
 	"gh_account":             {mode: keepLast, keep: []string{"user"}},
 	"gh_contributions_total": {mode: keepLast, keep: []string{"user"}},
-	"gh_contribution_repo":   {mode: keepLast, keep: []string{"user", "repo", "kind"}},
+	"gh_contribution_repo":   {mode: keepLast, keep: []string{"user", "owner", "repo", "full_name", "kind"}},
 	"gh_social_account":      {mode: keepLast, keep: []string{"user", "provider"}},
 	"gh_achievement":         {mode: keepLast, keep: []string{"user", "achievement"}},
 	// The progress beside each badge: a daily snapshot like the badge, and
@@ -80,7 +87,7 @@ var promRules = map[string]rule{
 	// so the newest reading is the only one that means anything: which
 	// repositories are pinned and where, which badges the account wears, and
 	// what the sponsors page earns and is owed.
-	"gh_pinned_item":      {mode: keepLast, keep: []string{"user", "repo"}},
+	"gh_pinned_item":      {mode: keepLast, keep: []string{"user", "owner", "repo", "full_name"}},
 	"gh_profile_flag":     {mode: keepLast, keep: []string{"user", "flag"}},
 	"gh_sponsors_listing": {mode: keepLast, keep: []string{"user"}},
 	// Tiers are inventory rather than a stream. The collector anchors them to
@@ -116,7 +123,7 @@ var promRules = map[string]rule{
 	// Windows that only mean anything added up.
 	"gh_traffic":          {mode: sum, keep: []string{"repo", "kind"}},
 	"gh_traffic_referrer": {mode: sum, keep: []string{"repo", "referrer"}},
-	"gh_billing_usage":    {mode: sum, keep: []string{"product", "sku", "unit", "repo"}},
+	"gh_billing_usage":    {mode: sum, keep: []string{"product", "sku", "unit", "owner", "repo", "full_name"}},
 
 	// Dated items, reduced to a count and the mean of their numbers.
 	"gh_pull_request": {mode: count, as: "gh_pull_requests", keep: []string{"repo", "state"}},
@@ -189,7 +196,7 @@ var promRules = map[string]rule{
 	"gh_code_scanning_analysis": {mode: count, as: "gh_code_scanning_analyses", keep: []string{"repo", "tool"}},
 	"gh_fork":                   {mode: count, as: "gh_forks_seen", keep: []string{"repo"}},
 	"gh_star_given":             {mode: count, as: "gh_stars_given", keep: []string{"user"}},
-	"gh_external_contribution":  {mode: count, as: "gh_external_contributions", keep: []string{"user", "repo"}},
+	"gh_external_contribution":  {mode: count, as: "gh_external_contributions", keep: []string{"user", "owner", "repo", "full_name"}},
 	"gh_dependabot_alert_item":  {mode: count, as: "gh_dependabot_alerts", keep: []string{"repo", "severity"}, labels: []string{"alert_state"}},
 	"gh_label":                  {mode: keepLast, keep: []string{"repo", "label"}},
 	"gh_milestone":              {mode: keepLast, keep: []string{"repo", "milestone", "state"}},
@@ -202,7 +209,19 @@ var promRules = map[string]rule{
 	"gh_repo_total": {mode: keepLast, keep: []string{
 		"owner", "repo", "full_name", "visibility", "archived", "fork",
 	}},
-	"gh_rate_limit":  {mode: keepLast, keep: []string{"resource"}},
+	"gh_rate_limit": {mode: keepLast, keep: []string{"resource"}},
+	// The sweep's report on itself, which is a snapshot by construction: one
+	// row per family per sweep and one per repository it could not collect,
+	// all of them stamped at the sweep, so the newest is the whole answer.
+	// Every tag is kept, `reason` included, because the question this
+	// measurement exists to answer is which family failed on which
+	// repository and why, and a reduction that dropped any of the three
+	// would answer a different one. The three that name the repository
+	// travel together as everywhere else, and hold the sentinel on the row
+	// that is about a family rather than about a repository.
+	"gh_collector_family": {mode: keepLast, keep: []string{
+		"family", "scope", "owner", "repo", "full_name", "reason",
+	}},
 	"gh_repo_policy": {mode: keepLast, keep: []string{"owner", "repo", "full_name"}},
 
 	// Code scanning per item, the twin of the Dependabot rule above.
@@ -363,18 +382,26 @@ func NewReducer() *Reducer {
 
 // Summarize reduces a batch statelessly. Counters are not produced; use a
 // Reducer for those.
-func Summarize(points []Point) []Point { return NewReducer().Reduce(points) }
+func Summarize(points []Point) []Point {
+	gauges, _ := NewReducer().Reduce(points)
+	return gauges
+}
 
-// Reduce reduces a batch of points. The result is safe to expose as gauges.
-func (rd *Reducer) Reduce(points []Point) []Point {
+// Reduce reduces a batch of points to gauges, and reports how many of the
+// points it took. A measurement with no rule, or one whose rule is skip, has
+// no honest current value and is left out entirely, so an exporter can say
+// what it holds rather than what it was offered.
+func (rd *Reducer) Reduce(points []Point) (gauges []Point, taken int) {
 	rd.mu.Lock()
 	defer rd.mu.Unlock()
 
 	var s series
 	for _, p := range points {
-		rd.fold(&s, p)
+		if rd.fold(&s, p) {
+			taken++
+		}
 	}
-	return s.gauges(time.Now())
+	return s.gauges(time.Now()), taken
 }
 
 // series is the set of accumulators a reduction is building, in the order each
@@ -401,13 +428,13 @@ func (s *series) at(key, name string, mode reduce, tags map[string]string) *acc 
 	return a
 }
 
-// fold adds one point to the series its rule reduces it to. A measurement with
-// no rule, or one whose rule is skip, has no honest current value and is left
-// out entirely.
-func (rd *Reducer) fold(s *series, p Point) {
+// fold adds one point to the series its rule reduces it to, and reports
+// whether it took it. A measurement with no rule, or one whose rule is skip,
+// has no honest current value and is left out entirely.
+func (rd *Reducer) fold(s *series, p Point) bool {
 	r, known := promRules[p.Measurement]
 	if !known || r.mode == skip {
-		return
+		return false
 	}
 	name := p.Measurement
 	if r.as != "" {
@@ -430,6 +457,7 @@ func (rd *Reducer) fold(s *series, p Point) {
 	case sum:
 		a.addNumbers(p.Fields)
 	}
+	return true
 }
 
 // keptTags is the reduced label set: the tags the rule names and nothing else,

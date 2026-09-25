@@ -13,6 +13,54 @@ Windows, y el código fuente lleva partes solo de Windows allí donde el sistema
 se comporta distinto. Lo que sigue está escrito para PowerShell, con la forma
 de `cmd` al lado siempre que las dos difieran.
 
+## La instalación en una línea
+
+```powershell
+irm https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.ps1 | iex
+```
+
+Deduce la arquitectura, coge la release más nueva, comprueba el archivo contra
+la suma de verificación que esa release publicó, y deja `ghchronicle.exe` en
+`%LOCALAPPDATA%\Programs\ghchronicle`. Una suma que no cuadra lo detiene sin
+instalar nada, y no hay parámetro para saltarse ese paso.
+
+Después añade ese directorio a **tu** PATH, el de usuario, para que
+`ghchronicle` funcione por nombre. Los programas ya abiertos conservan el PATH
+con el que arrancaron, así que abre una terminal nueva. Windows lee el PATH de
+máquina antes que el de usuario, así que otro `ghchronicle` instalado para todo
+el mundo, o una compilación vieja de `go install`, puede seguir respondiendo al
+nombre cuando esto termina; el script avisa cuando encuentra uno. No escribe nada fuera
+de tu perfil ni pide elevación: una instalación para toda la máquina es cosa de
+un instalador con su aviso de UAC, no de un script bajado de la red.
+
+Para fijar una versión, elegir el directorio o no tocar el PATH, el script
+admite parámetros, y eso pide la forma algo más larga porque `iex` no tiene
+dónde ponerlos:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.ps1))) -Version __VERSION__ -BinDir C:\tools -NoPathUpdate
+```
+
+<Aside type="note" title="Leerlo antes es justo para lo que sirve que sea corto">
+  `irm ... | iex` ejecuta lo que esa URL responda hoy.
+  `irm https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.ps1 -OutFile install.ps1`, léelo, y luego `.\install.ps1`: es el mismo
+  script, y es lo bastante corto para leerlo.
+</Aside>
+
+El resto de esta página es esa misma instalación hecha a mano, que es lo que
+seguir cuando quieres saber exactamente qué ha aterrizado dónde, o cuando
+prefieres no ejecutar un script que no has escrito.
+
+Después deja que escriba la configuración:
+
+```powershell
+ghchronicle -setup
+```
+
+Pide un token y dónde van los números, comprueba cada respuesta contra aquello
+que nombra, y escribe un `config.yaml` en `%APPDATA%\ghchronicle` y, si lo
+quieres, una tarea programada que registras con `schtasks`.
+
 ## Lo que cambia aquí
 
 Lee esto primero. Cuatro de las cinco líneas de abajo son la razón de que una
@@ -51,7 +99,7 @@ pregúntale a la máquina y no al intérprete:
 ```
 
 ```powershell
-$version = "1.0.0"
+$version = "__VERSION__"
 $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "amd64" }
 $base = "https://github.com/jmrplens/ghchronicle/releases/download/v$version"
 $zip = "ghchronicle_${version}_windows_${arch}.zip"
@@ -66,11 +114,11 @@ Server Core y de casi cualquier imagen endurecida. En PowerShell 7 el
 modificador se acepta y no hace nada.
 
 <Aside type="caution" title="Nombra la versión en vez de pedir la más nueva">
-  El repositorio publica una etiqueta móvil `v1` junto a las releases
+  El repositorio publica una etiqueta mayor móvil junto a las releases
   numeradas, porque la Action está listada en el Marketplace y ese listado
-  necesita una. La release `v1` **no lleva ningún fichero**, así que nunca
-  construyas una URL de descarga a partir de la etiqueta mayor: detrás no hay
-  nada que descargar. Coge la versión de la
+  necesita una. La release de esa etiqueta **no lleva ningún fichero**, así que
+  nunca construyas una URL de descarga a partir de la etiqueta mayor: detrás no
+  hay nada que descargar. Coge la versión de la
   [página de releases](https://github.com/jmrplens/ghchronicle/releases) y
   escríbela, como arriba.
 </Aside>
@@ -122,7 +170,7 @@ directorio que hayas hecho.
 
 <FileTree>
 
-- ghchronicle_1.0.0_windows_amd64.zip
+- ghchronicle_VERSION_windows_ARCH.zip
   - ghchronicle.exe el binario
   - LICENSE
   - README.md
@@ -181,7 +229,7 @@ ghchronicle -version
 ```
 
 ```text
-ghchronicle 1.0.0 (commit 4e5dfc2, built 2026-09-14T23:04:02Z)
+ghchronicle __VERSION__ (commit 4e5dfc2, built 2026-09-14T23:04:02Z)
 ```
 
 <Aside type="note" title="Si Windows avisa sobre el fichero">

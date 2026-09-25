@@ -6,6 +6,17 @@
 // /api/ds/query exactly as a render does, and reports what came back, one line
 // per panel and a count at the end.
 //
+// What it can find where: a column the store has never created is an error on
+// InfluxDB and on PostgreSQL, and this reports it and fails. On Elasticsearch,
+// Prometheus and Graphite a missing field is not an error at all, the query
+// answers nothing, so the same defect arrives here as EMPTY and the run passes.
+// Running this against those three still says every panel is answerable; it
+// does not say that every column exists. Against those three the check that
+// finds a panel nobody can draw is the containerised suite, which runs every
+// panel against stores where every family has been written and fails on any
+// panel error not on an explicit allowlist (test/e2e/docker, behind the
+// dockere2e tag, called from release.yml through e2e.yml before every tag).
+//
 //	GRAFANA_TOKEN=... go run ./cmd/check_dashboards <store> <datasource-uid> [range]
 //
 // The run itself lives in internal/grafana, because the containerized
@@ -19,10 +30,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
-	"github.com/jmrplens/ghchronicle/cmd/internal/dashboards"
+	"github.com/jmrplens/ghchronicle/internal/dashboards"
 	"github.com/jmrplens/ghchronicle/internal/grafana"
 )
 
@@ -108,10 +120,22 @@ func check(ctx context.Context, args []string, stdout io.Writer) (passed bool, e
 	})
 
 	bad, empty := 0, 0
+	var noColumn, noTable []string
 	for _, r := range results {
 		switch {
+		// A table the store has not created is the one failure that is not
+		// the dashboard's: the family has not been collected here yet, and
+		// the panel will draw the day it is. Reported, counted on its own
+		// line, and deliberately not part of the status, so that this can be
+		// a release gate on a store whose backfill is still walking.
+		case r.Err != "" && classify(r.Err) == missingTable:
+			noTable = append(noTable, r.Panel.Title)
+			fmt.Fprintf(stdout, "WAIT %s: %s\n", r.Panel.Title, grafana.Trim(r.Err, 240))
 		case r.Err != "":
 			bad++
+			if classify(r.Err) == missingColumn {
+				noColumn = append(noColumn, r.Panel.Title)
+			}
 			fmt.Fprintf(stdout, "FAIL %s: %s\n", r.Panel.Title, grafana.Trim(r.Err, 240))
 		case r.Rows == 0:
 			empty++
@@ -120,8 +144,80 @@ func check(ctx context.Context, args []string, stdout io.Writer) (passed bool, e
 			fmt.Fprintf(stdout, "ok   %s: %d\n", r.Panel.Title, r.Rows)
 		}
 	}
+	if len(noTable) > 0 {
+		fmt.Fprintf(stdout, "\n%d waiting on a table this store has not created, which is a "+
+			"family it has not collected yet; they do not fail the run: %s\n",
+			len(noTable), strings.Join(noTable, ", "))
+	}
+	if len(noColumn) > 0 {
+		fmt.Fprintf(stdout, "\n%d of the failures name a column this store has not created. A "+
+			"column exists once a point has carried it, so that is a panel nobody with this "+
+			"account's history can draw, and no amount of collecting will fill it: %s\n",
+			len(noColumn), strings.Join(noColumn, ", "))
+	}
 	fmt.Fprintf(stdout, "\n%d failing, %d empty\n", bad, empty)
 	return bad == 0, nil
+}
+
+// Why a failure is worth telling apart.
+//
+// A release check against a real account answers with three kinds of failure
+// under one word, and the status has to mean something or the checklist item
+// it is on becomes a thing people tick. Measured on the production store on
+// 2026-09-17: thirty-three panels failed for a family the backfill had not
+// reached and one for a column that account will never have, and the command
+// exited 1 either way, the same status it gives for the run where the one is
+// absent. So a family the backfill has not reached leaves the store with no
+// table, every panel over it is reported as waiting rather than failing, and
+// it does not touch the status: that gap fills itself, and the misspelled
+// measurement it might hide is what the containerised suite catches, where
+// every family is written and none of these tables can be missing. A panel
+// naming a column the store has never created is the opposite: a column of
+// these stores exists once a point has carried it, so a field the account has
+// never had a reason to write is a column the planner rejects before it reads
+// a row, for ever. That is what hid eight resolved
+// Dependabot alerts behind "No data" on the account this was first run
+// against, under a corner badge nobody notices, because the panel asked for
+// `dismissed_reason` and the account had only ever fixed alerts. Everything
+// else is a query that is wrong in the ordinary way.
+type failureKind int
+
+const (
+	otherFailure failureKind = iota
+	missingTable
+	missingColumn
+)
+
+// The sentences the stores answer with. The table ones are tried first: the
+// PostgreSQL wording for a missing table names a relation and the one for a
+// missing column names a column, and both end in "does not exist".
+var (
+	tableGone = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)table '[^']*' not found`),         // InfluxDB 3
+		regexp.MustCompile(`(?i)relation "[^"]*" does not exist`), // PostgreSQL
+		regexp.MustCompile(`(?i)index_not_found_exception`),       // Elasticsearch
+	}
+	columnGone = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)no field named`),                // InfluxDB 3
+		regexp.MustCompile(`(?i)column "[^"]*" does not exist`), // PostgreSQL
+		regexp.MustCompile(`(?i)column [^ ]* does not exist`),   // PostgreSQL, unquoted
+		regexp.MustCompile(`(?i)no such column`),                // the SQLite wording, in case
+	}
+)
+
+// classify says which of the three a reported failure is.
+func classify(err string) failureKind {
+	for _, re := range tableGone {
+		if re.MatchString(err) {
+			return missingTable
+		}
+	}
+	for _, re := range columnGone {
+		if re.MatchString(err) {
+			return missingColumn
+		}
+	}
+	return otherFailure
 }
 
 // vars is the substitution a dashboard render would perform and /api/ds/query

@@ -502,3 +502,34 @@ func TestColumnsOfOrdersASharedNameByType(t *testing.T) {
 		}
 	}
 }
+
+// TestExitPutsAnErrorAheadOfTheStatus. The decision main used to hold: a run
+// that could not reach PostgreSQL at all leaves with 1 and says why, whatever
+// status it had got to, and a run that reached it leaves with the status it
+// answered. Nothing reached that while it lived in main.
+func TestExitPutsAnErrorAheadOfTheStatus(t *testing.T) {
+	// No t.Parallel: it sets an environment variable, which the two cannot
+	// both do.
+	var out, errs strings.Builder
+	// No DSN and no Grafana: run stops before PostgreSQL says anything.
+	t.Setenv("PGHOST", "")
+	if exit(t.Context(), []string{"--dsn", ""}, &out, &errs) == 0 {
+		t.Errorf("exit = 0 for a run that could not start, want a failure\nstdout: %s\nstderr: %s",
+			out.String(), errs.String())
+	}
+	if errs.Len() == 0 && out.Len() == 0 {
+		t.Error("it failed and said nothing on either stream")
+	}
+
+	// And the other side of the same decision: a run that reached PostgreSQL
+	// leaves with the status it answered, not with one of its own.
+	fakePsql(t, "", "")
+	var passOut, passErrs strings.Builder
+	if got := exit(t.Context(), []string{schemaFile(t)}, &passOut, &passErrs); got != 0 {
+		t.Errorf("exit = %d for a run that passed, want 0\nstdout: %s\nstderr: %s",
+			got, passOut.String(), passErrs.String())
+	}
+	if passErrs.Len() != 0 {
+		t.Errorf("a passing run wrote to stderr: %s", passErrs.String())
+	}
+}

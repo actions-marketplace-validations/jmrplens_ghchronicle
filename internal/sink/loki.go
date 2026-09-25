@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/jmrplens/ghchronicle/internal/httpx"
 )
 
 // Loki writes the events, not the numbers.
@@ -85,7 +87,8 @@ func NewLoki(url, tenant string, labels map[string]string, batch int, maxAge, ti
 	}
 	return &Loki{
 		URL: url, TenantID: tenant, Labels: labels, Batch: batch, MaxAge: maxAge,
-		watermarks: map[string]time.Time{}, client: &http.Client{Timeout: timeout},
+		watermarks: map[string]time.Time{},
+		client:     &http.Client{Timeout: timeout, Transport: httpx.OwnTransport()},
 	}
 }
 
@@ -114,12 +117,16 @@ func fieldOf(p Point, k string) string {
 	return fmt.Sprint(v)
 }
 
+// Every sentence that names a repository names it in full. `repo` is the short
+// name on every measurement now, and these four are about other people's
+// repositories more often than the account's own: "octocat starred go" says
+// nothing a reader can act on, and two owners can name a repository the same.
 var lokiEvents = map[string]lokiEvent{
 	"gh_star": {kind: "star", message: func(p Point) string {
 		return fmt.Sprintf("%s starred %s", tagOf(p, "user"), tagOf(p, "full_name"))
 	}},
 	"gh_star_given": {kind: "star_given", message: func(p Point) string {
-		return fmt.Sprintf("%s starred %s", tagOf(p, "user"), tagOf(p, "repo"))
+		return fmt.Sprintf("%s starred %s", tagOf(p, "user"), tagOf(p, "full_name"))
 	}},
 	"gh_fork": {kind: "fork", message: func(p Point) string {
 		return fmt.Sprintf("%s forked %s", tagOf(p, "by"), tagOf(p, "full_name"))
@@ -176,10 +183,10 @@ var lokiEvents = map[string]lokiEvent{
 	// No actor: the feed is the account's own, so the actor is the login on
 	// every row and the collector stopped writing it.
 	"gh_event": {kind: "event", message: func(p Point) string {
-		return fmt.Sprintf("%s on %s", tagOf(p, "type"), tagOf(p, "repo"))
+		return fmt.Sprintf("%s on %s", tagOf(p, "type"), tagOf(p, "full_name"))
 	}},
 	"gh_notification": {kind: "notification", message: func(p Point) string {
-		return fmt.Sprintf("%s: %s (%s)", tagOf(p, "repo"), fieldOf(p, "title"), tagOf(p, "reason"))
+		return fmt.Sprintf("%s: %s (%s)", tagOf(p, "full_name"), fieldOf(p, "title"), tagOf(p, "reason"))
 	}},
 	"gh_discussion": {kind: "discussion", message: func(p Point) string {
 		return fmt.Sprintf("discussion in %s (%s), answered %s", tagOf(p, "full_name"),
@@ -194,7 +201,7 @@ var lokiEvents = map[string]lokiEvent{
 		return fieldOf(p, "line")
 	}},
 	"gh_external_contribution": {kind: "external_contribution", message: func(p Point) string {
-		return fmt.Sprintf("%s merged %s#%s", tagOf(p, "user"), tagOf(p, "repo"), tagOf(p, "number"))
+		return fmt.Sprintf("%s merged %s#%s", tagOf(p, "user"), tagOf(p, "full_name"), tagOf(p, "number"))
 	}},
 	// The environment is what a reader is looking for here, so it goes in the
 	// sentence rather than only in the logfmt tail: "which of my environments
@@ -280,20 +287,33 @@ type lokiEntry struct {
 // A write is three steps, and the middle one is the reason this is not a
 // single loop: what Loki accepts depends on the newest entry in each stream,
 // which is not known until every point has been read.
-func (l *Loki) Write(ctx context.Context, points []Point) error {
+// Write pushes the points that have an event rendering and are recent enough
+// for the stream they belong to.
+//
+// Most of a sweep is not counted as written here, and that is the point of the
+// count. This sink renders about a dozen measurements of the ninety the
+// collectors produce, and it says so nowhere else: a measurement with no rule
+// is dropped inside eventsByStream without a word. A caller that counted what
+// it handed over would credit Loki with storing every point of every family,
+// which is what the runner used to do.
+func (l *Loki) Write(ctx context.Context, points []Point) (int, error) {
 	grouped, newest, old := l.eventsByStream(points)
 	values, behind := l.admit(grouped, newest)
 	dropped := old + behind
 
+	written := 0
+	for _, entries := range values {
+		written += len(entries)
+	}
 	if len(values) > 0 {
 		if err := l.push(ctx, values); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	if dropped > 0 {
-		return &DroppedError{N: dropped, Older: l.MaxAge}
+		return written, &DroppedError{N: dropped, Older: l.MaxAge}
 	}
-	return nil
+	return written, nil
 }
 
 // eventsByStream turns the points that have an event rule into log lines,

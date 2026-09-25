@@ -129,7 +129,7 @@
     },
     {
       "datasource": "${DS_POSTGRES}",
-      "description": "Page views, unique visitors and clones, summed over the dashboard range, so they move with the range picker. GitHub only keeps 14 days of traffic, so a range wider than that shows what was captured while it was still there.",
+      "description": "Page views, unique visitors and the people who cloned, summed over the dashboard range, so they move with the range picker. GitHub only keeps 14 days of traffic, so a range wider than that shows what was captured while it was still there. Cloners rather than clones because a clone is counted per pull and continuous integration pulls all day: on the account this was measured against one repository was cloned 135,683 times in a fortnight by 1,807 cloners, and 186 K beside 2.89 K views read as an audience. The clone count itself is two panels of the Audience section, \"Clones over time\" and \"Clone amplification\", where it is the subject rather than a headline.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -177,7 +177,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT SUM(CASE WHEN kind = 'views' THEN count ELSE 0 END) AS \"Views\", SUM(CASE WHEN kind = 'views' THEN uniques ELSE 0 END) AS \"Unique visitors\", SUM(CASE WHEN kind = 'clones' THEN count ELSE 0 END) AS \"Clones\" FROM gh_traffic WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring})",
+          "rawSql": "SELECT SUM(CASE WHEN kind = 'views' THEN count ELSE 0 END) AS \"Views\", SUM(CASE WHEN kind = 'views' THEN uniques ELSE 0 END) AS \"Unique visitors\", SUM(CASE WHEN kind = 'clones' THEN uniques ELSE 0 END) AS \"Unique cloners\" FROM gh_traffic WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring})",
           "refId": "A"
         }
       ],
@@ -388,7 +388,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "The whole life of each repository in one row: not what happened in the dashboard range, but everything there has ever been. The repository picker holds every repository the account can see, its forks and its archived ones alongside its own, so a count here is over all of them until the picker is narrowed. Sorted by commits, a fork of a busy project outranks anything the account wrote, so the fork and archived flags are columns here and a click on either sorts by it.",
+          "description": "The whole life of each repository in one row: not what happened in the dashboard range, but everything there has ever been. The repository picker holds every repository the account can see, its forks and its archived ones alongside its own, so a count here is over all of them until the picker is narrowed. Sorted by commits, a fork of a busy project outranks anything the account wrote, 370,296 commits against 3,385 on the account this was measured on, so the table opens with the account's own repositories first and the forks under them, both ranked by commits. The fork and archived flags are columns here rather than a filter, the title being what it is, and a click on either sorts by it.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -477,6 +477,10 @@
             "showHeader": true,
             "sortBy": [
               {
+                "desc": false,
+                "displayName": "Fork"
+              },
+              {
                 "desc": true,
                 "displayName": "Commits"
               }
@@ -497,7 +501,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "Each repository the account created, dated when it was created rather than when a sweep noticed it. Forks and private repositories are included, which is the point: those are exactly the ones a sweep with `include_forks` off never discovers. The contributions collection offers one trailing year of them at a time, so a fresh install sees a year here and the table reaches further back with every year the rows are kept. It names its own window rather than taking the dashboard's, so narrowing the range at the top of the page does not narrow this table.",
+          "description": "A trailing year at a time, whatever the row above is called: GitHub's contributions collection offers twelve months of them per sweep, so a fresh install sees one year here and the table reaches further back with every year the rows are kept. Each repository the account created, dated when it was created rather than when a sweep noticed it. Forks and private repositories are included, which is the point: those are exactly the ones a sweep with `include_forks` off never discovers. It names its own window rather than taking the dashboard's, so narrowing the range at the top of the page does not narrow this table.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -2267,7 +2271,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "Commits this account made in each repository over the last year, as the profile counts them.",
+          "description": "Commits this account made in each repository over the last year, as the profile counts them. The rows include repositories this account does not own, so the name carries its owner in every store but this one, where the owner is dropped for width and the row is still identified by the whole name behind the column.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -2382,7 +2386,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT regexp_replace(repo, '^[^/]+/', '') AS \"Repository\", commits AS \"Commits\", url AS \"Link\" FROM (SELECT repo, commits, url, ROW_NUMBER() OVER (PARTITION BY repo ORDER BY time DESC) AS rn FROM gh_contribution_repo WHERE $__timeFilter(time) AND kind = 'commits') x WHERE rn = 1 ORDER BY 2 DESC LIMIT 25",
+              "rawSql": "SELECT repo AS \"Repository\", commits AS \"Commits\", url AS \"Link\" FROM (SELECT repo, commits, url, ROW_NUMBER() OVER (PARTITION BY full_name ORDER BY time DESC) AS rn FROM gh_contribution_repo WHERE $__timeFilter(time) AND kind = 'commits') x WHERE rn = 1 ORDER BY 2 DESC LIMIT 25",
               "refId": "A"
             }
           ],
@@ -2549,7 +2553,7 @@
               "editorMode": "code",
               "format": "time_series",
               "rawQuery": true,
-              "rawSql": "SELECT time, CASE WHEN rk \u003c= 8 THEN repo ELSE 'other' END AS metric, SUM(v) AS commits FROM (SELECT time, repo, v, DENSE_RANK() OVER (ORDER BY total DESC, repo) AS rk FROM (SELECT $__timeGroupAlias(time, $__interval), repo, SUM(commits) AS v, SUM(SUM(commits)) OVER (PARTITION BY repo) AS total FROM gh_contribution_day_repo WHERE $__timeFilter(time) AND commits \u003e 0 GROUP BY 1, 2) y) x GROUP BY 1, 2 HAVING SUM(v) \u003e 0 ORDER BY 1",
+              "rawSql": "SELECT time, CASE WHEN rk \u003c= 8 THEN full_name ELSE 'other' END AS metric, SUM(v) AS commits FROM (SELECT time, full_name, v, DENSE_RANK() OVER (ORDER BY total DESC, full_name) AS rk FROM (SELECT $__timeGroupAlias(time, $__interval), full_name, SUM(commits) AS v, SUM(SUM(commits)) OVER (PARTITION BY full_name) AS total FROM gh_contribution_day_repo WHERE $__timeFilter(time) AND commits \u003e 0 GROUP BY 1, 2) y) x GROUP BY 1, 2 HAVING SUM(v) \u003e 0 ORDER BY 1",
               "refId": "A"
             }
           ],
@@ -2627,7 +2631,7 @@
       "panels": [
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "How much closed in the range and how long each took. Every duration is a median: half of what merged or closed took less than the number shown. Time to first review is the wait before a person other than the author looked at a pull request, so review bots, which answer in seconds, and the author's own replies are left out; a range where nobody else reviewed anything reads No data, which is the honest answer. Lines per pull request is the median of added plus removed by a merged one.",
+          "description": "How much closed in the range and how long each took. Every duration is a median: half of what merged or closed took less than the number shown. Time to review by someone else is the wait before a person other than the author looked at a pull request, so review bots, which answer in seconds, and the author's own replies are left out; a range in which nobody else reviewed anything reads \"no human review\" rather than a number, which is the honest answer and not the claim that nothing was reviewed. On the account this was measured against, 0 of 925 pull requests in the range had one. Lines per pull request is the median of added plus removed by a merged one.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -2662,7 +2666,7 @@
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Time to first review"
+                  "options": "Time to review by someone else"
                 },
                 "properties": [
                   {
@@ -2680,6 +2684,18 @@
                   {
                     "id": "unit",
                     "value": "s"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Time to review by someone else"
+                },
+                "properties": [
+                  {
+                    "id": "noValue",
+                    "value": "no human review"
                   }
                 ]
               }
@@ -2728,7 +2744,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY seconds_to_first_human_review) AS \"Time to first review\" FROM gh_pull_request WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring}) AND seconds_to_first_human_review IS NOT NULL",
+              "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY seconds_to_first_human_review) AS \"Time to review by someone else\" FROM gh_pull_request WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring}) AND seconds_to_first_human_review IS NOT NULL",
               "refId": "C"
             },
             {
@@ -3706,7 +3722,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "Time to merge only counts what merged. This is the other half: what is still open and how long it has been, which is the number that decides what to do next rather than describing what already happened. Each pull request is read from its newest row, so one that merged inside the range is not here any more.",
+          "description": "Time to merge only counts what merged. This is the other half: what is still open and how long it has been, which is the number that decides what to do next rather than describing what already happened. Each pull request is read from its newest row, so one that merged inside the range is not here any more. Archived repositories are left out, since nothing in one can be merged, closed or run until it is unarchived; narrowing the picker to one shows an empty table here rather than rows nobody can act on. A fork's pull request is still one that can be merged, so those stay and Fork says which they are.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -3799,6 +3815,18 @@
               {
                 "matcher": {
                   "id": "byName",
+                  "options": "Fork"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 70
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
                   "options": "Number"
                 },
                 "properties": [
@@ -3858,7 +3886,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT number AS \"Number\", seconds_open AS \"Open for\", repo AS \"Repository\", title AS \"Title\", author AS \"Author\", label_names AS \"Labels\", comments AS \"Comments\", reviews AS \"Reviews\", url AS \"Link\" FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY repo, number ORDER BY time DESC) AS rn FROM gh_pull_request WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring}) AND number \u003c\u003e '') x WHERE rn = 1 AND state = 'OPEN' ORDER BY seconds_open DESC LIMIT 25",
+              "rawSql": "SELECT x.number AS \"Number\", x.seconds_open AS \"Open for\", x.repo AS \"Repository\", x.title AS \"Title\", x.author AS \"Author\", x.label_names AS \"Labels\", x.comments AS \"Comments\", x.reviews AS \"Reviews\", f.fork AS \"Fork\", x.url AS \"Link\" FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY repo, number ORDER BY time DESC) AS rn FROM gh_pull_request WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring}) AND number \u003c\u003e '') x LEFT JOIN (SELECT repo, fork, archived FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY repo ORDER BY time DESC) AS rn FROM gh_repo WHERE time \u003e now() - INTERVAL '30 years' AND repo IN (${repo:sqlstring})) x WHERE rn = 1) f ON f.repo = x.repo WHERE x.rn = 1 AND x.state = 'OPEN' AND COALESCE(f.archived, 'false') \u003c\u003e 'true' ORDER BY x.seconds_open DESC LIMIT 25",
               "refId": "A"
             }
           ],
@@ -3867,7 +3895,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "The same question for issues: what is still open and for how long. Labels is what the issue was filed as, so an old one reads as a bug nobody fixed or a wish nobody granted. Each issue is read from its newest row, so one closed inside the range is not here any more.",
+          "description": "The same question for issues: what is still open and for how long. Labels is what the issue was filed as, so an old one reads as a bug nobody fixed or a wish nobody granted. Each issue is read from its newest row, so one closed inside the range is not here any more. Archived repositories are left out, since nothing in one can be merged, closed or run until it is unarchived; narrowing the picker to one shows an empty table here rather than rows nobody can act on. A fork's issues stay, and Fork says which they are.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -3936,6 +3964,18 @@
               {
                 "matcher": {
                   "id": "byName",
+                  "options": "Fork"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 70
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
                   "options": "Number"
                 },
                 "properties": [
@@ -3995,7 +4035,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT number AS \"Number\", seconds_open AS \"Open for\", repo AS \"Repository\", author AS \"Author\", comments AS \"Comments\", label_names AS \"Labels\", url AS \"Link\" FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY repo, number ORDER BY time DESC) AS rn FROM gh_issue WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring}) AND number \u003c\u003e '') x WHERE rn = 1 AND state = 'OPEN' ORDER BY seconds_open DESC LIMIT 25",
+              "rawSql": "SELECT x.number AS \"Number\", x.seconds_open AS \"Open for\", x.repo AS \"Repository\", x.author AS \"Author\", x.comments AS \"Comments\", x.label_names AS \"Labels\", f.fork AS \"Fork\", x.url AS \"Link\" FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY repo, number ORDER BY time DESC) AS rn FROM gh_issue WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring}) AND number \u003c\u003e '') x LEFT JOIN (SELECT repo, fork, archived FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY repo ORDER BY time DESC) AS rn FROM gh_repo WHERE time \u003e now() - INTERVAL '30 years' AND repo IN (${repo:sqlstring})) x WHERE rn = 1) f ON f.repo = x.repo WHERE x.rn = 1 AND x.state = 'OPEN' AND COALESCE(f.archived, 'false') \u003c\u003e 'true' ORDER BY x.seconds_open DESC LIMIT 25",
               "refId": "A"
             }
           ],
@@ -4233,7 +4273,7 @@
       "panels": [
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "How many runs the range holds and how they ended. The success rate is the runs that succeeded as a share of the runs that succeeded or failed: a run canceled by a newer push under a concurrency group, or skipped by its own condition, decided nothing and is counted beside it as undecided rather than as a failure. The run duration is the median over the range and the queue wait is the time a job spent waiting for a runner, which only exists at job level, the run-level number folding the wait into the duration. Over the runs whose jobs were expanded, which is the newest runs of each sweep and, after a backfill, the ninety days GitHub keeps jobs for; not every run the run count includes. Last come the bytes the runs left behind.",
+          "description": "How many runs the range holds and how they ended. The success rate is the runs that succeeded as a share of the runs that succeeded or failed: a run canceled by a newer push under a concurrency group, or skipped by its own condition, decided nothing and is counted beside it as undecided rather than as a failure. The run duration is the median over the range and the queue wait is the time a job spent waiting for a runner, which only exists at job level, the run-level number folding the wait into the duration. Over the runs whose jobs were expanded, which is the newest runs of each sweep and, after a backfill, the ninety days GitHub keeps jobs for; not every run the run count includes. Last come the bytes the runs left behind, which are the artifacts the walk reached: GitHub lists thousands of them per repository and the walk stops at five hundred, so this is a floor wherever it did. \"Artifact storage counted\" below puts the two counts beside it.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -4318,7 +4358,7 @@
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Artifact storage"
+                  "options": "Artifact storage walked"
                 },
                 "properties": [
                   {
@@ -4408,7 +4448,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT SUM(live_bytes) AS \"Artifact storage\" FROM (SELECT live_bytes, ROW_NUMBER() OVER (PARTITION BY repo ORDER BY time DESC) AS rn FROM gh_artifact_total WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring})) x WHERE rn = 1",
+              "rawSql": "SELECT SUM(live_bytes) AS \"Artifact storage walked\" FROM (SELECT live_bytes, ROW_NUMBER() OVER (PARTITION BY repo ORDER BY time DESC) AS rn FROM gh_artifact_total WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring})) x WHERE rn = 1",
               "refId": "F"
             },
             {
@@ -4701,7 +4741,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "Artifacts that have not expired. GitHub deletes them on their own schedule, which is why this falls without anyone doing anything. A reading taken at each sweep, so the curve starts the day the collector did: there is no history of it to rebuild. The eight repositories holding the most are named; the rest are `other`. One bar is one bucket, and the bucket widens with the range: a day over a month, a week over a year.",
+          "description": "Artifacts that have not expired, over the ones the walk reached, which is a floor on any repository with more than five hundred: \"Artifact storage counted\" further down has the counts that say which those are. GitHub deletes artifacts on their own schedule, which is why this falls without anyone doing anything. A reading taken at each sweep, so the curve starts the day the collector did: there is no history of it to rebuild. The eight repositories holding the most are named; the rest are `other`. One bar is one bucket, and the bucket widens with the range: a day over a month, a week over a year.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -5508,7 +5548,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "Sixty six of a hundred and thirteen declared workflows had not run in a week here. A workflow that never runs is either dead or waiting on a trigger that no longer fires, and nothing else in the dashboard would say so.",
+          "description": "A workflow that never runs is either dead or waiting on a trigger that no longer fires, and nothing else in the dashboard would say so. Archived repositories are left out, since nothing in one can be merged, closed or run until it is unarchived; narrowing the picker to one shows an empty table here rather than rows nobody can act on. A workflow in an archived repository cannot run at all, which is why every row of this table was one of those until they came out. A fork's workflows stay, since a fork can be given one that runs, and Fork says which they are.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -5543,6 +5583,18 @@
                   {
                     "id": "custom.width",
                     "value": 200
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Fork"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 70
                   }
                 ]
               },
@@ -5603,7 +5655,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT w.repo AS \"Repository\", w.workflow AS \"Workflow\", w.state AS \"State\", w.url AS \"Link\" FROM (SELECT DISTINCT repo, workflow, path, state, url FROM gh_workflow WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring})) w LEFT JOIN (SELECT DISTINCT repo, workflow FROM gh_workflow_run WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring})) r ON w.repo = r.repo AND w.path = r.workflow WHERE r.workflow IS NULL ORDER BY 1, 2",
+              "rawSql": "SELECT w.repo AS \"Repository\", w.workflow AS \"Workflow\", w.state AS \"State\", f.fork AS \"Fork\", w.url AS \"Link\" FROM (SELECT DISTINCT repo, workflow, path, state, url FROM gh_workflow WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring})) w LEFT JOIN (SELECT DISTINCT repo, workflow FROM gh_workflow_run WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring})) r ON w.repo = r.repo AND w.path = r.workflow LEFT JOIN (SELECT repo, fork, archived FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY repo ORDER BY time DESC) AS rn FROM gh_repo WHERE time \u003e now() - INTERVAL '30 years' AND repo IN (${repo:sqlstring})) x WHERE rn = 1) f ON f.repo = w.repo WHERE r.workflow IS NULL AND COALESCE(f.archived, 'false') \u003c\u003e 'true' ORDER BY 1, 2",
               "refId": "A"
             }
           ],
@@ -5672,7 +5724,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "Artifact storage, and how much of it was counted. When Walked is lower than Declared, the live size is a floor rather than a total: the walk stopped at the page cap. Here it is short by a factor of fifty six, and without this column the tile above would say so nowhere.",
+          "description": "Artifact storage, and how much of it was counted. Three counts, because the live size is on neither of the other two: Declared is GitHub's own total and counts the artifacts it has already expired, Walked is how far the page cap let the walk go, and Live is the artifacts still held among those, which is what the live size is the size of. When Walked is lower than Declared the live size is a floor rather than a total: here it is short by a factor of fifty six, and without these columns the tile above would say so nowhere.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -5725,6 +5777,18 @@
                     "value": 100
                   }
                 ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Live"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
               }
             ]
           },
@@ -5758,7 +5822,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT repo AS \"Repository\", MAX(count) AS \"Declared\", MAX(walked) AS \"Walked\", MAX(live_bytes) AS \"Live size\" FROM gh_artifact_total WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring}) GROUP BY 1 ORDER BY 2 DESC",
+              "rawSql": "SELECT repo AS \"Repository\", MAX(count) AS \"Declared\", MAX(walked) AS \"Walked\", MAX(live_count) AS \"Live\", MAX(live_bytes) AS \"Live size\" FROM gh_artifact_total WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring}) GROUP BY 1 ORDER BY 2 DESC",
               "refId": "A"
             }
           ],
@@ -7100,7 +7164,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "Whether a fork was ever pushed to separates a derivative from a bookmark, which most forks are.",
+          "description": "Whether a fork was ever pushed to separates a derivative from a bookmark, which most forks are. Idle is the time since that push, counted from the row's own date, so it is right when the panel is drawn rather than when the last sweep ran.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -7150,11 +7214,11 @@
                 "properties": [
                   {
                     "id": "unit",
-                    "value": "d"
+                    "value": "s"
                   },
                   {
                     "id": "custom.width",
-                    "value": 100
+                    "value": 90
                   }
                 ]
               },
@@ -7215,7 +7279,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT \"by\" AS \"By\", time AS \"Forked\", repo AS \"Repository\", advanced AS \"Pushed to\", days_since_push AS \"Idle\", url AS \"Link\" FROM gh_fork WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring}) ORDER BY time DESC LIMIT 25",
+              "rawSql": "SELECT \"by\" AS \"By\", time AS \"Forked\", repo AS \"Repository\", advanced AS \"Pushed to\", date_part('epoch', now() - time) - seconds_to_push AS \"Idle\", url AS \"Link\" FROM gh_fork WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring}) ORDER BY time DESC LIMIT 25",
               "refId": "A"
             }
           ],
@@ -7712,7 +7776,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT repo AS \"Repository\", COUNT(*) AS \"Comments\", MAX(CASE WHEN own = 'false' THEN 1 ELSE 0 END) AS \"Elsewhere\" FROM gh_issue_comment WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 2 DESC LIMIT 20",
+              "rawSql": "SELECT full_name AS \"Repository\", COUNT(*) AS \"Comments\", MAX(CASE WHEN own = 'false' THEN 1 ELSE 0 END) AS \"Elsewhere\" FROM gh_issue_comment WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 2 DESC LIMIT 20",
               "refId": "A"
             }
           ],
@@ -7806,7 +7870,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT repo AS \"Repository\", SUM(answers) AS \"Accepted answers\", COUNT(*) AS \"Comments\", SUM(upvotes) AS \"Upvotes\" FROM gh_discussion_comment WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 2 DESC, 3 DESC LIMIT 20",
+              "rawSql": "SELECT full_name AS \"Repository\", SUM(answers) AS \"Accepted answers\", COUNT(*) AS \"Comments\", SUM(upvotes) AS \"Upvotes\" FROM gh_discussion_comment WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 2 DESC, 3 DESC LIMIT 20",
               "refId": "A"
             }
           ],
@@ -7957,7 +8021,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT title AS \"Title\", time AS \"When\", repo AS \"Repository\", answers AS \"Accepted\", url AS \"Link\" FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY comment ORDER BY answers DESC) AS rn FROM gh_discussion_comment WHERE time \u003e now() - INTERVAL '30 years' AND own = 'false') x WHERE rn = 1 ORDER BY 2 DESC LIMIT 50",
+              "rawSql": "SELECT title AS \"Title\", time AS \"When\", full_name AS \"Repository\", answers AS \"Accepted\", url AS \"Link\" FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY comment ORDER BY answers DESC) AS rn FROM gh_discussion_comment WHERE time \u003e now() - INTERVAL '30 years' AND own = 'false') x WHERE rn = 1 ORDER BY 2 DESC LIMIT 50",
               "refId": "A"
             }
           ],
@@ -8672,7 +8736,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "Nothing else answers which branches were abandoned: GitHub's own branch list is ordered by name and keeps no history. The refs come back unordered and capped at a hundred per repository, so `gh_repo_total.branches` is the true count and is what makes the truncation visible. The repository picker holds every repository the account can see, its forks and its archived ones alongside its own, so a count here is over all of them until the picker is narrowed. Of the 1,208 branches in the picker when this was measured, 1,083 were a fork's; gh_branch carries no fork tag, so narrowing the picker is the only way to read this as the account's own branches.",
+          "description": "Nothing else answers which branches were abandoned: GitHub's own branch list is ordered by name and keeps no history. The refs come back unordered and capped at a hundred per repository, so `gh_repo_total.branches` is the true count and is what makes the truncation visible. The account's own live repositories only: a branch of a fork is the upstream project's history and not the account's, and a branch of an archived repository can be neither pushed to nor deleted. Of the 1,208 branches in the picker when this was measured, 1,083 were a fork's and those are the rows this leaves out.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -8770,7 +8834,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT branch AS \"Branch\", days_since_commit AS \"Idle\", repo AS \"Repository\", is_default AS \"Default\" FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY repo, branch ORDER BY time DESC) AS rn FROM gh_branch WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring})) x WHERE rn = 1 ORDER BY 2 DESC",
+              "rawSql": "SELECT b.branch AS \"Branch\", b.days_since_commit AS \"Idle\", b.repo AS \"Repository\", b.is_default AS \"Default\" FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY repo, branch ORDER BY time DESC) AS rn FROM gh_branch WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring})) b LEFT JOIN (SELECT repo, fork, archived FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY repo ORDER BY time DESC) AS rn FROM gh_repo WHERE time \u003e now() - INTERVAL '30 years' AND repo IN (${repo:sqlstring})) x WHERE rn = 1) f ON f.repo = b.repo WHERE b.rn = 1 AND COALESCE(f.fork, 'false') \u003c\u003e 'true' AND COALESCE(f.archived, 'false') \u003c\u003e 'true' ORDER BY 2 DESC",
               "refId": "A"
             }
           ],
@@ -10786,7 +10850,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "Dependabot alerts that were fixed or dismissed, newest first, with the advisory each one was and how long it stayed open. The score is there because the word rounds it away: one alert in the measured account scores 9.3 under a word whose mean is 6.1. It is the v4 score where the advisory carries one.",
+          "description": "Dependabot alerts that were fixed or dismissed, newest first, with the advisory each one was and how long it stayed open. Outcome is which of the two it was, read from the alert's own state rather than from the reason it was dismissed: an account that has only ever fixed its alerts has never written such a reason, and a column these stores were never given does not exist to be selected. The score is there because the word rounds it away: one alert in the measured account scores 9.3 under a word whose mean is 6.1. It is the v4 score where the advisory carries one.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -10867,7 +10931,7 @@
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Dismissed"
+                  "options": "Outcome"
                 },
                 "properties": [
                   {
@@ -10954,7 +11018,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT package AS \"Package\", time AS \"Raised\", repo AS \"Repository\", severity AS \"Severity\", summary AS \"Advisory\", COALESCE(cvss_v4, cvss) AS \"CVSS\", dismissed_reason AS \"Dismissed\", seconds_to_resolve AS \"Time to resolve\", url AS \"Link\" FROM gh_dependabot_alert_item WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring}) AND seconds_to_resolve IS NOT NULL ORDER BY time DESC LIMIT 25",
+              "rawSql": "SELECT package AS \"Package\", time AS \"Raised\", repo AS \"Repository\", severity AS \"Severity\", summary AS \"Advisory\", COALESCE(cvss_v4, cvss) AS \"CVSS\", alert_state AS \"Outcome\", seconds_to_resolve AS \"Time to resolve\", url AS \"Link\" FROM gh_dependabot_alert_item WHERE $__timeFilter(time) AND repo IN (${repo:sqlstring}) AND seconds_to_resolve IS NOT NULL ORDER BY time DESC LIMIT 25",
               "refId": "A"
             }
           ],
@@ -11081,7 +11145,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "The two counts at the top of the section, as the rows they are made of, whatever the dashboard range: an alert is listed while it is open, however long ago it was raised. A Dependabot alert names its package and advisory, a code scanning alert its rule and tool. Open for is the newest reading, so the row moves forward every sweep until the alert is fixed or dismissed. The link opens the alert, which GitHub shows to the owner alone.",
+          "description": "The two counts at the top of the section, as the rows they are made of, whatever the dashboard range: an alert is listed while it is open, however long ago it was raised. A Dependabot alert names its package and advisory, a code scanning alert its rule and tool. Open for is counted from the row's own date to now, so it is right when the panel is drawn rather than when the last sweep ran. The link opens the alert, which GitHub shows to the owner alone.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -11232,7 +11296,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT package AS \"What\", time AS \"Raised\", 'dependabot' AS \"Kind\", repo AS \"Repository\", severity AS \"Severity\", summary AS \"Detail\", seconds_open AS \"Open for\", url AS \"Link\" FROM gh_dependabot_alert_item WHERE time \u003e now() - INTERVAL '30 years' AND repo IN (${repo:sqlstring}) AND alert_state = 'open' UNION ALL SELECT rule AS \"What\", time AS \"Raised\", 'code scanning' AS \"Kind\", repo AS \"Repository\", severity AS \"Severity\", tool AS \"Detail\", seconds_open AS \"Open for\", url AS \"Link\" FROM gh_code_scanning_alert_item WHERE time \u003e now() - INTERVAL '30 years' AND repo IN (${repo:sqlstring}) AND alert_state = 'open' ORDER BY 2 LIMIT 25",
+              "rawSql": "SELECT package AS \"What\", time AS \"Raised\", 'dependabot' AS \"Kind\", repo AS \"Repository\", severity AS \"Severity\", summary AS \"Detail\", date_part('epoch', now() - time) AS \"Open for\", url AS \"Link\" FROM gh_dependabot_alert_item WHERE time \u003e now() - INTERVAL '30 years' AND repo IN (${repo:sqlstring}) AND alert_state = 'open' UNION ALL SELECT rule AS \"What\", time AS \"Raised\", 'code scanning' AS \"Kind\", repo AS \"Repository\", severity AS \"Severity\", tool AS \"Detail\", date_part('epoch', now() - time) AS \"Open for\", url AS \"Link\" FROM gh_code_scanning_alert_item WHERE time \u003e now() - INTERVAL '30 years' AND repo IN (${repo:sqlstring}) AND alert_state = 'open' ORDER BY 2 LIMIT 25",
               "refId": "A"
             }
           ],
@@ -12078,7 +12142,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT repo AS \"Repository\", SUM(gross) AS \"Gross\", sku AS \"SKU\", SUM(quantity) AS \"Quantity\", MAX(unit) AS \"Unit\", MAX(price_per_unit) AS \"Price\", SUM(net) AS \"Net\" FROM gh_billing_usage WHERE $__timeFilter(time) AND repo \u003c\u003e '' GROUP BY 1, 3 ORDER BY 2 DESC LIMIT 40",
+              "rawSql": "SELECT repo AS \"Repository\", SUM(gross) AS \"Gross\", sku AS \"SKU\", SUM(quantity) AS \"Quantity\", MAX(unit) AS \"Unit\", MAX(price_per_unit) AS \"Price\", SUM(net) AS \"Net\" FROM gh_billing_usage WHERE $__timeFilter(time) AND repo \u003c\u003e '(none)' GROUP BY 1, 3 ORDER BY 2 DESC LIMIT 40",
               "refId": "A"
             }
           ],
@@ -12197,7 +12261,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "GitHub caps a repository at ten gigabytes and evicts the least recently used entry past it. Three repositories here are over the line and are throwing caches away on every run; the panel above says which key goes.",
+          "description": "GitHub caps a repository at ten gigabytes and evicts the least recently used entry past it. The bar is each repository's cache against that cap, so one that has reached the red end is throwing caches away on every run and the panel above says which key goes.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -12494,7 +12558,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT \"Repository\", \"Events\" FROM (SELECT CASE WHEN rn \u003c= 10 THEN \"Repository\" ELSE 'other' END AS \"Repository\", SUM(\"Events\") AS \"Events\", MIN(rn) AS o FROM (SELECT repo AS \"Repository\", SUM(events) AS \"Events\", ROW_NUMBER() OVER (ORDER BY SUM(events) DESC) AS rn FROM gh_event WHERE $__timeFilter(time) GROUP BY 1) z GROUP BY 1) w ORDER BY o",
+              "rawSql": "SELECT \"Repository\", \"Events\" FROM (SELECT CASE WHEN rn \u003c= 10 THEN \"Repository\" ELSE 'other' END AS \"Repository\", SUM(\"Events\") AS \"Events\", MIN(rn) AS o FROM (SELECT full_name AS \"Repository\", SUM(events) AS \"Events\", ROW_NUMBER() OVER (ORDER BY SUM(events) DESC) AS rn FROM gh_event WHERE $__timeFilter(time) GROUP BY 1) z GROUP BY 1) w ORDER BY o",
               "refId": "A"
             }
           ],
@@ -12805,7 +12869,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT title AS \"Title\", time AS \"Updated\", repo AS \"Repository\", subject_type AS \"Kind\", reason AS \"Reason\", notifications AS \"Updates\", url AS \"Link\" FROM gh_notification WHERE $__timeFilter(time) ORDER BY time DESC LIMIT 25",
+              "rawSql": "SELECT title AS \"Title\", time AS \"Updated\", full_name AS \"Repository\", subject_type AS \"Kind\", reason AS \"Reason\", notifications AS \"Updates\", url AS \"Link\" FROM gh_notification WHERE $__timeFilter(time) ORDER BY time DESC LIMIT 25",
               "refId": "A"
             }
           ],
@@ -12965,7 +13029,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT repo AS \"Repository\", time - seconds_open * INTERVAL '1 second' AS \"Opened\", time AS \"Seen\", kind AS \"Kind\", state AS \"State\", title AS \"Title\", comments AS \"Comments\", url AS \"Link\" FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY repo, kind, number ORDER BY time DESC) AS rn FROM gh_external_contribution WHERE $__timeFilter(time)) x WHERE rn = 1 ORDER BY time DESC LIMIT 40",
+              "rawSql": "SELECT full_name AS \"Repository\", time - seconds_open * INTERVAL '1 second' AS \"Opened\", time AS \"Seen\", kind AS \"Kind\", state AS \"State\", title AS \"Title\", comments AS \"Comments\", url AS \"Link\" FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY full_name, kind, number ORDER BY time DESC) AS rn FROM gh_external_contribution WHERE $__timeFilter(time)) x WHERE rn = 1 ORDER BY time DESC LIMIT 40",
               "refId": "A"
             }
           ],
@@ -13167,7 +13231,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT repo AS \"Repository\", time AS \"When\", language AS \"Language\", repo_stars AS \"Its stars\", url AS \"Link\" FROM gh_star_given WHERE $__timeFilter(time) ORDER BY time DESC LIMIT 25",
+              "rawSql": "SELECT full_name AS \"Repository\", time AS \"When\", language AS \"Language\", repo_stars AS \"Its stars\", url AS \"Link\" FROM gh_star_given WHERE $__timeFilter(time) ORDER BY time DESC LIMIT 25",
               "refId": "A"
             }
           ],
@@ -15745,7 +15809,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "What the profile shows first, in the order it shows it. The row worth seeing is a pinned repository nobody has pushed to in two years. Position is a field and not a tag on purpose: a repository that moves from slot two to slot three is the same pin, and as a tag every rearrangement would fork the series. The repository filter at the top of the dashboard does not reach this panel, because a pin is named owner/name, or is a gist, and the variable holds neither.",
+          "description": "What the profile shows first, in the order it shows it. The row worth seeing is a pinned repository nobody has pushed to in two years. Position is a field and not a tag on purpose: a repository that moves from slot two to slot three is the same pin, and as a tag every rearrangement would fork the series. The repository filter at the top of the dashboard does not reach this panel, because a pin can be a gist, which is named by its hash and is in no repository the filter knows.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -16586,11 +16650,11 @@
         "x": 0,
         "y": 726
       },
-      "id": 169,
+      "id": 171,
       "panels": [
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "The share of each bucket spent, which puts a bucket of five thousand and one of fifteen thousand on the same axis. The buckets worth watching, which are the ones with more than thirty requests in them: search has thirty a minute and would flatten the axis. A bucket this account never touched is left out of the chart entirely, since its flat zero was still a legend entry; \"Every bucket\" beside this lists all eleven, and a Most used of 0 is where that absence belongs. A reading taken at each sweep, so the curve starts the day the collector did. One bar is one bucket, and the bucket widens with the range: a day over a month, a week over a year.",
+          "description": "The share of each bucket spent, which puts a bucket of five thousand and one of fifteen thousand on the same axis. The buckets worth watching, which are the ones with more than thirty requests in them: search has thirty a minute and would flatten the axis. A bucket this account never touched is left out of the chart entirely, since its flat zero was still a legend entry; \"Every bucket\" beside this lists every one of them, and a Most used of 0 is where that absence belongs. A reading taken at each sweep, so the curve starts the day the collector did. One bar is one bucket, and the bucket widens with the range: a day over a month, a week over a year.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -16650,7 +16714,7 @@
         },
         {
           "datasource": "${DS_POSTGRES}",
-          "description": "Fifteen buckets, and the one that runs out first decides what a sweep can collect. Reading them costs nothing: GET /rate_limit is free.",
+          "description": "Every budget GitHub reports, and the one that runs out first decides what a sweep can collect. Reading them costs nothing: GET /rate_limit is free.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -16700,6 +16764,226 @@
             }
           ],
           "title": "Every bucket",
+          "type": "table"
+        },
+        {
+          "datasource": "${DS_POSTGRES}",
+          "description": "Every collector that ran in the range, with what stopped it where something did, how many sweeps it ran in, and how many repositories it was asked about. A family with no row here did not run at all, which is the one thing an empty panel could never say: not due, switched off, or skipped because a rate budget was spent. Why is what separates the two kinds of failure that would otherwise read alike: a search budget spent twice a day sorts apart from the 502 that cost a repository its history, and a family that had both has a row for each. Failures is the sweep's own count, so a family that failed on some of its repositories and was still marked as having run says so here; a batched query that failed names no repository and counts as one. One row here is not a family: `discover` is the repository listing, which every family depends on, and it appears only when it failed, because a listing that worked is stated by every other row of the same sweep. No repository filter: these rows belong to the collector rather than to a repository.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "filterable": false,
+                "minWidth": 90
+              },
+              "fieldMinMax": true
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Failures"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "mode": "gradient",
+                      "type": "gauge"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "min",
+                    "value": 0
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 100
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Why"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Sweeps"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 80
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Repositories"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 100
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 738
+          },
+          "id": 169,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": true,
+                "displayName": "Failures"
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": "${DS_POSTGRES}",
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "SELECT family AS \"Family\", SUM(failed) AS \"Failures\", reason AS \"Why\", COUNT(*) AS \"Sweeps\", MAX(repos) AS \"Repositories\" FROM gh_collector_family WHERE $__timeFilter(time) AND scope = 'family' GROUP BY 1, 3 ORDER BY 2 DESC, 1",
+              "refId": "A"
+            }
+          ],
+          "title": "Every family",
+          "type": "table"
+        },
+        {
+          "datasource": "${DS_POSTGRES}",
+          "description": "One row per repository one collector could not collect, newest first: which family, which repository, and what GitHub answered. This is where an empty row of the dashboard gets its explanation. Measured on this account on 2026-09-16, before there was anything to read it from: five repositories held no workflow run or job at all, each because one call for the jobs of one run had answered 502 once, and the Continuous integration row was drawn over an account missing its five busiest repositories. An empty table is the good case. No repository filter: a repository a sweep could not collect may be one the filter does not list, since the filter is built from rows the same sweep writes.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "filterable": false,
+                "minWidth": 90
+              },
+              "fieldMinMax": true
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "When"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "time: YYYY-MM-DD HH:mm"
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 135
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Repository"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Why"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 12,
+            "y": 738
+          },
+          "id": 170,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "showHeader": true,
+            "sortBy": []
+          },
+          "targets": [
+            {
+              "datasource": "${DS_POSTGRES}",
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "SELECT time AS \"When\", family AS \"Family\", repo AS \"Repository\", reason AS \"Why\", error AS \"What GitHub said\" FROM gh_collector_family WHERE $__timeFilter(time) AND scope = 'repo' ORDER BY time DESC LIMIT 100",
+              "refId": "A"
+            }
+          ],
+          "title": "What failed, and where",
           "type": "table"
         }
       ],

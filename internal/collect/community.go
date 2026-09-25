@@ -34,7 +34,7 @@ type forkRow struct {
 	} `json:"owner"`
 }
 
-func (f Forks) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now time.Time) ([]sink.Point, error) {
+func (f Forks) Collect(ctx context.Context, c *ghapi.Client, repo Repo, _ time.Time) ([]sink.Point, error) {
 	var points []sink.Point
 	most := f.Walk.limit(5)
 	for page := 1; page <= most; page++ {
@@ -49,7 +49,7 @@ func (f Forks) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now time
 		if len(batch) == 0 {
 			break
 		}
-		points = append(points, forkPoints(batch, repo, now)...)
+		points = append(points, forkPoints(batch, repo)...)
 		if len(batch) < 100 {
 			break
 		}
@@ -59,16 +59,28 @@ func (f Forks) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now time
 
 // forkPoints stamps each fork at the moment it was created, so re-reading the
 // list rewrites the same rows rather than adding to them.
-func forkPoints(rows []forkRow, repo Repo, now time.Time) []sink.Point {
-	base := map[string]string{"owner": repo.Owner, "repo": repo.Name, "full_name": repo.FullName}
+func forkPoints(rows []forkRow, repo Repo) []sink.Point {
+	base := repoTags(repo.Owner, repo.Name)
 	points := make([]sink.Point, 0, len(rows))
 	for i := range rows {
 		f := &rows[i]
 		fields := map[string]any{"forks": 1, "stars": f.Stars}
 		// Whether the fork was ever pushed to separates a real derivative
-		// from a bookmark, which is most of them.
+		// from a bookmark, which is most of them, and how long after the fork
+		// that last push came says how long it stayed a derivative. Negative
+		// when GitHub reports a push older than the fork itself, which is
+		// what a fork of a repository nobody has touched since looks like.
+		//
+		// Counted from the fork's own date rather than from now, because the
+		// row is dated at the fork. As `days_since_push` this was one more
+		// day every day, on a row dated whenever the fork was made: the value
+		// meant "when the sweep ran" rather than anything about the fork, and
+		// every rewrite cost a parquet file in the fork's original bucket,
+		// 569 files for 592 rows measured on 2026-09-17. What a reader wants,
+		// how long it has been idle, is that bucket's own arithmetic:
+		// now() less the row's time, less this.
 		if !f.PushedAt.IsZero() {
-			fields["days_since_push"] = int(now.Sub(f.PushedAt).Hours() / 24)
+			fields["seconds_to_push"] = int(f.PushedAt.Sub(f.CreatedAt).Seconds())
 			fields["advanced"] = f.PushedAt.After(f.CreatedAt.Add(time.Minute))
 		}
 		points = append(points, sink.Point{
@@ -152,7 +164,7 @@ func (Planning) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now tim
 		}
 		return nil, err
 	}
-	base := map[string]string{"owner": repo.Owner, "repo": repo.Name, "full_name": repo.FullName}
+	base := repoTags(repo.Owner, repo.Name)
 	day := now.UTC().Truncate(24 * time.Hour)
 	var points []sink.Point
 
@@ -461,8 +473,8 @@ func (n *discussionCommentNode) point(login, repo string) sink.Point {
 	n.context().addTo(fields)
 	return sink.Point{
 		Measurement: "gh_discussion_comment",
-		Tags: map[string]string{
-			"user": login, "repo": repo,
+		Tags: merge(fullNameTags(repo), map[string]string{
+			"user":      login,
 			"own":       boolTag(isOwn(repo, login)),
 			"is_answer": boolTag(n.IsAnswer),
 			// A reply to a reply is a different thing from a comment on the
@@ -471,7 +483,7 @@ func (n *discussionCommentNode) point(login, repo string) sink.Point {
 			"author":   author,
 			"comment":  strconv.FormatInt(n.DatabaseID, 10),
 			"number":   strconv.Itoa(n.Discussion.Number),
-		},
+		}),
 		Fields: fields,
 		Time:   n.CreatedAt,
 	}
@@ -638,11 +650,11 @@ func (o Outbound) issueComments(ctx context.Context, c *ghapi.Client, _ time.Tim
 			repo := n.Issue.Repository.NameWithOwner
 			points = append(points, sink.Point{
 				Measurement: "gh_issue_comment",
-				Tags: map[string]string{
-					"user": o.Login, "repo": repo,
+				Tags: merge(fullNameTags(repo), map[string]string{
+					"user":   o.Login,
 					"own":    boolTag(isOwn(repo, o.Login)),
 					"number": strconv.Itoa(n.Issue.Number),
-				},
+				}),
 				Fields: map[string]any{"comments": 1, "url": n.URL},
 				Time:   n.CreatedAt,
 			})
@@ -725,14 +737,14 @@ func (o Outbound) starred(ctx context.Context, c *ghapi.Client) ([]sink.Point, e
 			}
 			points = append(points, sink.Point{
 				Measurement: "gh_star_given",
-				Tags: map[string]string{
+				Tags: merge(fullNameTags(s.Node.NameWithOwner), map[string]string{
 					// A repository GitHub has detected no language in answers
 					// null here, and an empty tag value is dropped: measured
 					// on 2026-09-10, 9 of the 93 repositories this account has
 					// starred. Those rows would sit in an InfluxDB series of
 					// their own, carrying no language tag at all.
-					"user": o.Login, "repo": s.Node.NameWithOwner, "language": orNone(language),
-				},
+					"user": o.Login, "language": orNone(language),
+				}),
 				Fields: withURL(map[string]any{
 					"stars": 1, "repo_stars": s.Node.Stars,
 				}, githubPage(s.Node.NameWithOwner)),
@@ -794,10 +806,10 @@ func (o Outbound) search(ctx context.Context, c *ghapi.Client, kind, state, filt
 		}
 		points = append(points, sink.Point{
 			Measurement: "gh_external_contribution",
-			Tags: map[string]string{
-				"user": o.Login, "repo": it.Repository.NameWithOwner,
+			Tags: merge(fullNameTags(it.Repository.NameWithOwner), map[string]string{
+				"user":   o.Login,
 				"number": strconv.Itoa(it.Number), "kind": kind, "state": state,
-			},
+			}),
 			Fields: fields,
 			Time:   stamp,
 		})

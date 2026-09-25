@@ -1,12 +1,12 @@
 ---
 title: Qué muestran
-description: Las diecisiete secciones y sus ciento cincuenta y dos paneles, una captura de cada una, y qué cambia cuando el almacén no puede responder.
+description: Las diecisiete secciones y sus ciento cincuenta y cuatro paneles, una captura de cada una, y qué cambia cuando el almacén no puede responder.
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
 Un dashboard, renderizado una vez por almacén. Diecisiete secciones, ciento
-cincuenta y dos paneles, en los mismos sitios y con los mismos títulos sea cual
+cincuenta y cuatro paneles, en los mismos sitios y con los mismos títulos sea cual
 sea la base de datos elegida. Abajo hay una captura por sección, en el orden en
 que el dashboard las coloca.
 
@@ -41,7 +41,7 @@ paneles de Overview y no todos.
 Una cabecera y no un panel: la marca, grande y centrada, el nombre debajo, y
 bajo el nombre un botón a esta documentación y otro al código, sobre la propia
 página y sin caja alrededor. Después cuatro grupos de cifras: Repositories (repositorios, estrellas, forks),
-Traffic in range (visitas, visitantes únicos, clones), Community (seguidores,
+Traffic in range (visitas, visitantes únicos, clonadores únicos), Community (seguidores,
 seguidos, patrocinadores, patrocinados) y Account (contribuciones del último
 año, edad de la cuenta, vigilados, estrellas dadas, gists, paquetes). Un grupo
 es un panel de estadística con varios valores y no una tarjeta por cifra: en un
@@ -53,6 +53,14 @@ fila más reciente de cada repositorio y no todas las del rango, porque ambas so
 estado actual y una suma sobre el rango contaría cada pasada.
 
 ![La fila Overview: el selector de repositorio y el rango de 90 días en la parte superior, el distintivo de ghchronicle con sus botones Docs y Source, y luego cuatro grupos de tarjetas con 5 repositorios, 350 estrellas y 51 forks; 37,5 mil visitas, 21,1 mil visitantes únicos y 19,6 mil clones; 117 seguidores, 58 seguidos, 4 patrocinadores y 2 patrocinados; y una cuenta con 3,22 mil contribuciones y 7,78 años de antigüedad](../../../../assets/dashboards/overview.png)
+
+La tercera tarjeta de tráfico cuenta a quienes clonaron y no los clones. La
+integración continua clona todo el día, así que el recuento de clones va junto
+a la cifra que lo explica y no en un titular: medido en la cuenta con la que se
+leyó esto, un repositorio se clonó 135.683 veces en quince días desde 1.807
+clonadores, y 186 K junto a 2,89 K visitas se lee como audiencia. El recuento
+está en dos paneles de la sección Audience. La captura de arriba es anterior a
+ese cambio y todavía pone "clones".
 
 Lee `gh_account`, `gh_repo`, `gh_traffic` y `gh_contributions_total`.
 
@@ -73,6 +81,15 @@ acumulado por esta herramienta no sería. Es además la forma que un almacén pu
 responder sin leer todo lo que guarda: InfluxDB 3 Core rechaza una consulta que
 abra más ficheros que su tope, cuarenta mil donde esto se midió, y "cuántas en
 total" a partir de una fila por hecho es exactamente esa consulta.
+
+"Every repository, ever" lista todos los repositorios que tiene el selector,
+forks y archivados incluidos, porque eso es lo que dice el título. Se ordena
+por commits, lo que en una cuenta con forks de proyectos concurridos significa
+que la historia de otra persona supera a todo lo que ha escrito la cuenta:
+370.296 commits frente a 3.385 donde se leyó esto. Así que las marcas de fork y
+archivado son columnas, y la tabla se abre ordenada por la primera y luego por
+commits, lo que pone los repositorios propios en la primera pantalla y los
+forks debajo sin dejar ninguno fuera.
 
 Lee `gh_account_total` y `gh_repo_total`.
 
@@ -169,8 +186,9 @@ Lee `gh_contribution_day`, `gh_commits_week`, `gh_contributions_total`,
 ## Pull requests and issues
 
 Catorce paneles, y la sección donde la recolección por elemento se paga sola.
-Fusionados, tiempo hasta fusionar, tiempo hasta la primera revisión, issues
-cerrados, tiempo hasta cerrar y líneas cambiadas como un grupo de seis valores;
+Fusionados, tiempo hasta fusionar, tiempo hasta la revisión de otra persona,
+issues cerrados, tiempo hasta cerrar y líneas cambiadas como un grupo de seis
+valores;
 luego el mismo reparto por estado en el tiempo, las pull requests fusionadas más
 grandes y los desgloses por autor, por repositorio y por revisor. Un elemento
 que sigue abierto se escribe una vez al día mientras lo esté, y esas filas se
@@ -182,12 +200,33 @@ de su fila más reciente.
 ![La sección Pull requests and issues: un grupo de tarjetas con 467 pull requests fusionadas, 10,3 horas hasta fusionar, 9,81 horas hasta la primera revisión, 137 issues cerradas, 1,75 días hasta cerrar una y 75 líneas por pull request; pull requests e issues por día separados por estado; tiempo hasta fusionar y tamaño de la pull request en el tiempo; las fusionadas más grandes con su título, asociación y etiquetas; pull requests por autor; la tabla por repositorio; la tabla de revisores encabezada por review-bot con 209 revisiones; revisiones por día; las dos tablas de los que llevan más tiempo abiertos; hilos de revisión por día separados en bot y humano; y la tabla de deuda de revisión](../../../../assets/dashboards/pull-requests-and-issues.png)
 
 <Aside
-  type="caution" title="Cuidado al leer el tiempo hasta la primera revisión" >
+  type="caution" title="Cuidado al leer la espera de revisión" >
   El panel cuenta la primera revisión de alguien que no es el autor ni un bot,
-  así que en una cuenta revisada solo por bots dice No data en vez de los pocos
-  segundos de los bots. Medido, nueve de cada diez pull requests tuvieron una
+  así que en una cuenta revisada solo por bots dice "no human review" en vez de
+  los pocos segundos de los bots. Se llama así por eso, porque "Time to first review"
+  sobre un No data se leía como que no se había revisado nada: medido aquí el
+  2026-09-17, 703 de 825 pull requests en quince días tuvieron una primera
+  revisión y ninguna la tuvo de otra persona, y el campo tiene catorce filas en
+  todo el almacén. Nueve de cada diez pull requests tuvieron una
   revisión de un bot en menos de un minuto; la tabla Reviewers lo enseña, con
   cada bot marcado como tal y las respuestas del propio autor en una sola fila.
+</Aside>
+
+<Aside type="note" title="Las listas de qué hacer ahora dejan fuera lo que no se puede hacer">
+  "Open the longest", "Open issues the longest", "Workflows that never ran" y
+  "Stale branches" son los cuatro paneles que se leen como una cola de trabajo.
+  En una cuenta con 17 repositorios archivados y 22 forks de proyectos de otras
+  personas, los cuatro los encabezaban filas sobre las que no se puede hacer
+  nada: las ocho pull requests abiertas más antiguas eran de dependabot en dos
+  repositorios archivados, todos los workflows que nunca se habían ejecutado
+  estaban en uno archivado, y 1.083 de 1.208 ramas eran de un fork. Así que los
+  dos dashboards SQL unen el repositorio de cada fila con `gh_repo`, la única
+  medida que lleva las marcas de fork y archivado, y dejan fuera los archivados
+  en los tres primeros y tanto los archivados como los forks en el de ramas;
+  los tres primeros conservan una columna Fork, porque la pull request de un
+  fork sigue siendo una que se puede fusionar. Prometheus, Graphite y
+  Elasticsearch no tienen join, así que allí esas filas se quedan y cada panel
+  lo dice.
 </Aside>
 
 Lee `gh_pull_request`, `gh_pull_request_review` y `gh_issue`.
@@ -219,7 +258,11 @@ aquí que solo pueden responder los dos almacenes SQL.
 
 "Artifact storage counted" existe porque el total es un suelo. GitHub dice cuántos artefactos tiene un repositorio, el colector anota
 cuántos recorrió de verdad, y cuando el segundo es menor el tamaño vivo se queda
-corto: en un repositorio de aquí, por un factor de cincuenta y seis.
+corto: en un repositorio de aquí, por un factor de cincuenta y seis. Lleva una
+tercera cuenta, los artefactos vivos entre los recorridos, porque el total del
+propio GitHub incluye los que ya ha caducado y el tamaño no. La tarjeta del
+principio de la sección se llama por aquello sobre lo que está, y todo panel que
+enseña el tamaño enseña esas cuentas o dice en su descripción que es un suelo.
 
 Lee `gh_workflow_run`, `gh_workflow_job`, `gh_workflow_step`, `gh_workflow`,
 `gh_artifact`, `gh_artifact_total` y `gh_actions_cache`.
@@ -304,7 +347,8 @@ Un panel es texto en los ficheros exportados, "Where failure output went",
 porque la salida de un job fallido es texto y su sitio es un almacén de logs, y
 quien importa el dashboard puede no tener ninguno: un dashboard atado a un solo
 datasource no puede consultar dos. Publicado en un Grafana que sí tiene un
-datasource de Loki, con `cmd/publish_dashboard -loki <datasource-uid>`, el mismo
+datasource de Loki, que el colector crea a partir de un sink de Loki o toma de
+`grafana.datasource.loki_uid`, el mismo
 panel dibuja las últimas líneas de cada job fallido leídas de Loki, las más
 recientes primero, con el workflow, el job y la ejecución de cada línea en su
 cola logfmt. La variable de repositorio se aplica en los dashboards de InfluxDB,
@@ -381,7 +425,10 @@ porque el neto no siempre es cero y el descuento es donde aparece el crédito
 mensual. El precio por unidad está en la tabla por el mismo motivo: es lo que
 explica que treinta mil minutos de macOS cuesten más que doscientos cuarenta mil
 de Linux. Un repositorio puede salir en esa tabla y en ningún otro panel, porque
-la lista que factura y la que se recorre no son la misma.
+la lista que factura y la que se recorre no son la misma. Un cargo que no
+pertenece a ningún repositorio, que es lo que es un asiento de Copilot, se queda
+fuera de esa tabla en todos los almacenes: es una fila de la factura y no un
+repositorio llamado (none). Los totales de gasto de arriba sí lo incluyen.
 
 Los dos paneles de caché van del techo. GitHub limita cada repositorio a diez
 gigabytes y expulsa la entrada menos usada al pasarlo, así que la barra es cada
@@ -497,8 +544,8 @@ ninguno.
 Los ítems fijados llevan la posición como campo y no como etiqueta, porque un
 repositorio que pasa del hueco dos al tres es el mismo fijado, y como etiqueta
 cada recolocación bifurcaría la serie. El filtro de repositorio de la cabecera
-del dashboard no llega a ese panel: un fijado se llama owner/name, o es un
-gist, y la variable no guarda ninguna de las dos cosas.
+del dashboard no llega a ese panel: un fijado puede ser un gist, que se nombra
+por su hash y no está en ningún repositorio que el filtro conozca.
 
 Los logros se leen una vez al día de la página pública del perfil, porque
 ninguna API los lista. "Next tier at" es el umbral observado por la comunidad
@@ -514,9 +561,10 @@ Lee `gh_sponsors_listing`, `gh_sponsorship`, `gh_sponsors_tier`,
 
 ## The collector itself
 
-Lo que le queda al colector por gastar: el presupuesto de cada uno de los quince
-límites de GitHub en el tiempo, y una tabla con todos ellos ordenada por cuánto
-se ha gastado de cada uno.
+Lo que le queda al colector por gastar y lo que consiguió hacer: el presupuesto
+de cada uno de los quince límites de GitHub en el tiempo, una tabla con todos
+ellos ordenada por cuánto se ha gastado de cada uno, y debajo de esas dos el
+informe de la fila sobre el propio barrido.
 
 ![La sección The collector itself: el presupuesto de peticiones usado por cubo en el rango, y la tabla de todos los cubos con su límite, el máximo usado y el mínimo restante, encabezada por core con 3134 usados de 5000 y 1866 restantes](../../../../assets/dashboards/the-collector-itself.png)
 
@@ -526,7 +574,34 @@ nada: `GET /rate_limit` es el único endpoint que GitHub no cobra. Sin él, una
 familia saltada por falta de presupuesto es indistinguible de una que no tenía
 nada que contar.
 
-Lee `gh_rate_limit`.
+"Every family" y "What failed, and where" son los dos paneles de debajo, y la
+captura de arriba es anterior a ambos. El primero lista todos los colectores
+que corrieron en el rango, qué los detuvo cuando algo lo hizo, en cuántos
+barridos corrieron y cuántos repositorios se les preguntaron; una familia sin
+fila ahí no corrió en absoluto. El motivo es columna aparte para que los dos
+tipos de fallo se ordenen por separado: un presupuesto de búsqueda agotado dos
+veces al día no es el 502 que le costó a un repositorio su historia, y una
+familia que tuvo ambos tiene una fila de cada. El segundo es una fila por cada
+repositorio que un colector no pudo recoger, el más reciente primero, con lo
+que respondió GitHub.
+Que la segunda tabla esté vacía es el caso bueno, y se dibuja vacía en lugar de
+rechazada porque las filas de la primera se escriben en cada barrido haya
+fallado algo o no, así que la medida que hay detrás de las dos existe desde el
+primero.
+
+Están ahí por un fallo que esta página no podía explicar. El 2026-09-16 cinco
+repositorios de esta cuenta no tenían ninguna ejecución ni trabajo de workflow,
+cada uno porque una llamada por los trabajos de una ejecución había respondido
+`502` una vez y el colector había tirado todo lo que había reunido de ese
+repositorio. La fila Continuous integration se dibujaba sobre una cuenta a la
+que le faltaban sus cinco repositorios más activos mientras la fila Cost de la
+misma página decía que uno de ellos había quemado 27,6 K minutos de macOS.
+Ninguno de los dos paneles usa la variable de repositorio: las filas de familia
+no pertenecen a ningún repositorio, y un repositorio que un barrido no pudo
+recoger puede ser uno que la variable ni siquiera lista, porque la variable se
+construye con filas que escribe ese mismo barrido.
+
+Lee `gh_rate_limit` y `gh_collector_family`.
 
 ## La columna Link
 

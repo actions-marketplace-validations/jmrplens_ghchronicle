@@ -8,7 +8,7 @@ The thirty-four families, what each one asks GitHub for, and the reason each exi
 
 Source: <https://jmrp.io/docs/ghchronicle/collectors/>
 
-Thirty-four families, ninety-one measurements. This page is what each family
+Thirty-four families, ninety-two measurements. This page is what each family
 is _for_; the [measurements reference](https://jmrp.io/docs/ghchronicle/collectors/measurements/)
 is every tag and field.
 
@@ -289,7 +289,7 @@ Every measurement, its tags, its fields, and how each one is dated.
 
 Source: <https://jmrp.io/docs/ghchronicle/collectors/measurements/>
 
-Ninety-one measurements. Each row says how a point is dated, because that is
+Ninety-two measurements. Each row says how a point is dated, because that is
 the thing that decides which questions it can answer.
 
 ### How to read the tables
@@ -301,7 +301,90 @@ the thing that decides which questions it can answer.
 | **now**   | A current state, which only makes sense as "what is true at this moment"                                                            |
 
 Every measurement carries `owner`, `repo` and `full_name` as tags unless it is
-account-wide, in which case it carries `user`. Most of them also carry a `url`
+account-wide, in which case it carries `user`. The three travel together or not
+at all, and `repo` is always the short name, on somebody else's repository as
+much as on your own: `owner=golang`, `repo=go`, `full_name=golang/go`. That is
+what lets a filter written for one measurement answer in every other, and it is
+what the dashboards' repository variable is built from. The short name is not an
+identity, since two owners can use the same one, so a query that needs identity
+groups by `full_name` and one that needs a person groups by `owner`.
+
+That has not always been true of all of them. Twelve
+carried no `owner` and put the full name inside `repo`, and `gh_billing_usage`
+had a short `repo`, no `owner` and an `org`. The three shapes did not overlap at
+all, which is worse than overlapping badly: a filter built from one of them
+matched nothing whatsoever in the others, and a union of two counted every
+repository twice. They are one shape now. `org` is gone with them, and it loses
+nothing: `organizationName` is not a property of the billing endpoint this tool
+calls, so the tag could only ever hold `(none)`, and on the organisation form of
+that report it names the organisation whose report was asked for, which is the
+owner. `owner` carries it.
+
+**Upgrading from a release before this shape** is a breaking change to what is
+already stored, and it is larger than a seam. Read the four paragraphs below
+before upgrading a database you want to keep.
+
+**Your existing rows are not converted, and most of them are written again.**
+Rows already stored keep the old tags and nothing rewrites them, because in
+InfluxDB the tag set is part of a point's identity. What is easy to miss is
+that most of the twelve are dated at the item's own time and re-offered on
+every sweep, and the write ledger keys on the tag set. Change the tag set and
+every one of those points is a miss, so **the first sweep after the upgrade
+writes the whole retained history again, at the same timestamps, under the new
+tags, beside the old rows**. That is not a seam you can wait out. A sum over a
+range that covers the rewritten history **doubles immediately and stays
+doubled**, for as long as GitHub keeps serving those items. On the account this
+was developed against that was a full year of `gh_contribution_day_repo`, which
+a shipped panel sums, and several hundred rows each of `gh_issue_comment`,
+`gh_external_contribution` and `gh_discussion_comment`. Only `gh_event` and
+`gh_notification` behave like a seam, because they are windows GitHub forgets.
+
+**So there are two honest options, and waiting is not one of them.** Recreate
+the database, which is what the author did; or delete the old-shape rows
+yourself, which in InfluxDB 3 means dropping the thirteen tables, since a tag
+cannot be renamed in place and a delete predicate cannot name a tag the new
+rows do not carry. There is no migration and there will not be one: renaming a
+tag means rewriting every affected row under a new identity, which is a restore
+rather than an update.
+
+**The PostgreSQL sink stops loading until its tables are changed.** It emits
+`CREATE TABLE IF NOT EXISTS`, which does nothing against a table an earlier
+release created, so the `INSERT` that follows names `owner` and `full_name`
+columns that do not exist and an `ON CONFLICT` key that does not exist either,
+and psql rejects it for all thirteen measurements. Drop those tables and let
+the next file recreate them, or add the two columns and rebuild each primary
+key:
+
+```sql
+ALTER TABLE gh_event
+  ADD COLUMN IF NOT EXISTS "owner" TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS "full_name" TEXT NOT NULL DEFAULT '';
+ALTER TABLE gh_event DROP CONSTRAINT IF EXISTS gh_event_pkey;
+ALTER TABLE gh_event
+  ADD PRIMARY KEY ("time", "action", "full_name", "owner", "ref_type", "repo", "type");
+```
+
+**The rebuilt key must be exactly the key this tool would declare** for that
+measurement: `time` followed by the tag columns of the table above, in name
+order. Do not assemble it from the columns your table happens to have. An
+upgraded `gh_billing_usage` still carries an `org` column from the old shape
+that nothing writes any more and that is not part of the key; include it and
+the `ON CONFLICT` the sink emits matches no unique constraint, so the load
+fails again with a message that points nowhere. The check on your own work is
+the `CREATE TABLE` the sink writes for that measurement into a fresh file: its
+`PRIMARY KEY` list is the answer.
+
+Adding the columns keeps the old rows but does not convert them: they hold the
+empty string where the new rows hold an owner, so they double-count exactly as
+they do in InfluxDB. Dropping is the clean option in both stores.
+
+**Queries you wrote yourself need updating, and only some of them fail loudly.**
+`gh_billing_usage.org` no longer exists, and in InfluxDB 3 naming a column no
+row has written fails at planning, so that one tells you. A filter such as
+`gh_event WHERE repo = 'owner/name'` keeps parsing and quietly returns nothing;
+it becomes `full_name = 'owner/name'`.
+
+Most measurements also carry a `url`
 field: the page on GitHub for the thing the row is about, so a dashboard row
 that names an item can also open it. A `url` is absolute or absent, since the
 dashboards link to the value itself, and every measurement that has one is
@@ -384,7 +467,7 @@ panel, which is the place to copy from.
 
 #### Every measurement, alphabetically
 
-Ninety-one, each link landing on the table it is in.
+Ninety-two, each link landing on the table it is in.
 
 [`gh_account`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#account) · [`gh_account_total`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#account) ·
 [`gh_achievement`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#account) · [`gh_achievement_progress`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#account) ·
@@ -397,7 +480,9 @@ Ninety-one, each link landing on the table it is in.
 [`gh_code_scanning_alert`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#security) ·
 [`gh_code_scanning_alert_item`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#security) ·
 [`gh_code_scanning_analysis`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#security) ·
-[`gh_code_scanning_setup`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#security) · [`gh_commit`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#development) ·
+[`gh_code_scanning_setup`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#security) ·
+[`gh_collector_family`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#configuration-and-delivery) ·
+[`gh_commit`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#development) ·
 [`gh_commit_check`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#development) · [`gh_commit_punchcard`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#account) ·
 [`gh_commits_week`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#account) · [`gh_contribution_day`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#account) ·
 [`gh_contribution_day_repo`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#account) · [`gh_contribution_repo`](https://jmrp.io/docs/ghchronicle/collectors/measurements/#account) ·
@@ -464,12 +549,21 @@ which is why they are a snapshot rather than a series.
 | Measurement     | Dated                            | Tags                       | Fields                                                 |
 | --------------- | -------------------------------- | -------------------------- | ------------------------------------------------------ |
 | `gh_star` | dated, when the star was given | `user` | `starred`, `url`, `user_url` |
-| `gh_star_given` | dated                            | `user`, `repo`, `language` | `stars`, `repo_stars`, `url`                           |
-| `gh_fork`       | dated, when the fork was created | `by`                       | `forks`, `stars`, `days_since_push`, `advanced`, `url` |
+| `gh_star_given` | dated                            | `user`, `language` | `stars`, `repo_stars`, `url`                           |
+| `gh_fork`       | dated, when the fork was created | `by`                       | `forks`, `stars`, `seconds_to_push`, `advanced`, `url` |
 
 `gh_star_given` is the outbound direction: what this account starred in other
 people's repositories. `advanced` on a fork separates a real derivative from a
-bookmark, which most forks are.
+bookmark, which most forks are, and `seconds_to_push` says how long after the
+fork its last push came. It is negative when GitHub reports a push older than
+the fork itself.
+
+How long a fork has been idle is not stored, because the row is dated when the
+fork was created: it is that date subtracted from now, less `seconds_to_push`,
+and a query computes it. Stored, it was one day larger every day written on to
+a row dated years earlier, which meant "when the sweep ran" rather than
+anything about the fork, and every rewrite cost a file in the fork's own
+partition.
 
 ### Repositories
 
@@ -520,7 +614,7 @@ is the one kind with no row.
 | `gh_discussion` | dated, when created | `category`, `answerable`, `author`, `number` | `has_answer`, `comments`, `replies`, `reactions`, `upvotes`, `closed`, `state_reason`, `seconds_to_answer`, `seconds_to_close`, `title`, `url` |
 | `gh_label`                 | daily                               | `label`                                                  | `issues`, `pull_requests`, `used`, `url`                                                                                                                   |
 | `gh_milestone`             | daily                               | `milestone`, `state`                                     | `progress`, `issues`, `pull_requests`, `days_to_due`, `seconds_to_close`, `url`                                                                            |
-| `gh_external_contribution` | dated                               | `user`, `repo`, `number`, `kind`, `state`                | `contributions`, `merged`, `title`, `comments`, `seconds_to_merge`, `seconds_open`, `url`                                                                  |
+| `gh_external_contribution` | dated                               | `user`, `number`, `kind`, `state`                | `contributions`, `merged`, `title`, `comments`, `seconds_to_merge`, `seconds_open`, `url`                                                                  |
 
 `gh_commit` is what replaces `stats/code_frequency`, which returns 202 with an
 empty body forever on a personal account. `signature` is `unsigned` when there
@@ -603,7 +697,7 @@ two added together.
 | `gh_workflow_step`       | dated, when it finished | `workflow`, `job_name`, `attempt`, `step`, `conclusion`                   | `duration_seconds`, `step_number`                                                                                                                       |
 | `gh_workflow` | now | `workflow`, `path`, `state` | `active`, `age_days`, `days_since_change`, `url` |
 | `gh_artifact`            | dated, when created     | `artifact`                                                                | `live`, `size_bytes`, `retention_days`, `digest`, `run_id`, `head_sha`, `head_branch`, `url`                                                            |
-| `gh_artifact_total`      | now                     |                                                                           | `live_bytes`, `count`, `walked`                                                                                                                         |
+| `gh_artifact_total`      | now                     |                                                                           | `live_bytes`, `live_count`, `count`, `walked`                                                                                                           |
 | `gh_actions_cache`       | now                     |                                                                           | `size_bytes`, `count`                                                                                                                                   |
 | `gh_actions_cache_entry` | daily                   | `cache`, `ref`                                                            | `size_bytes`, `caches`, `key`, `days_since_use`, `age_days`                                                                                             |
 | `gh_repo_activity`       | dated                   | `activity`, `actor`                                                       | `events`, `id`, `ref_name`                                                                                                                              |
@@ -700,8 +794,15 @@ as a tag it would create a series for every job ever executed. The workflow job
 tag is `job_name` rather than `job`, because `job` collides with the labels
 Prometheus adds at scrape time.
 
-When `walked` is lower than `count`, the live size is a floor and the
-repository has more artifacts than the page cap reached.
+`gh_artifact_total` carries three counts because its size is on none of the
+obvious ones. `count` is GitHub's own total for the repository and it counts
+the artifacts GitHub has already expired: measured on jmrplens/jmrp.io on
+2026-09-17, page 40 of the listing was expired to the last row against a
+declared 29,405. `walked` is how far the five-page cap let the walk go.
+`live_bytes` is the size of the artifacts GitHub still holds among the ones
+walked, and `live_count` is how many those are, which is the count the size is
+over. When `walked` is below `count` the live figures are a floor rather than a
+total, which on that repository was short by a factor of fifty six.
 
 `gh_actions_cache` says a repository holds twelve gigabytes;
 `gh_actions_cache_entry` says which key holds them and which has not been
@@ -714,9 +815,9 @@ whole key is a series per build.
 | Measurement                   | Dated                    | Tags                                                                                               | Fields                                                                                                                               |
 | ----------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `gh_dependabot_alert`         | now                      | `severity`, `ecosystem`                                                                            | `open`, `url`                                                                                                                        |
-| `gh_dependabot_alert_item` | dated, when raised | `number`, `severity`, `ecosystem`, `package`, `ghsa`, `scope`, `relationship`, `manifest` | `alert_state`, `alerts`, `cvss`, `cvss_v4`, `epss`, `epss_percentile`, `cve`, `cwe`, `summary`, `vulnerable_range`, `first_patched`, `dismissed_reason`, `dismissed_by`, `dismissed_comment`, `seconds_to_detect`, `seconds_to_resolve`, `seconds_open`, `url` |
+| `gh_dependabot_alert_item` | dated, when raised | `number`, `severity`, `ecosystem`, `package`, `ghsa`, `scope`, `relationship`, `manifest` | `alert_state`, `alerts`, `cvss`, `cvss_v4`, `epss`, `epss_percentile`, `cve`, `cwe`, `summary`, `vulnerable_range`, `first_patched`, `dismissed_reason`, `dismissed_by`, `dismissed_comment`, `seconds_to_detect`, `seconds_to_resolve`, `url` |
 | `gh_code_scanning_alert`      | now                      | `severity`, `tool`                                                                                 | `open`, `url`                                                                                                                        |
-| `gh_code_scanning_alert_item` | dated, when raised       | `number`, `severity`, `tool`, `rule`, `path`, `category`, `ref`                                    | `alert_state`, `resolution`, `alerts`, `commit`, `line`, `cwe`, `seconds_to_resolve`, `seconds_open`, `url`                                                       |
+| `gh_code_scanning_alert_item` | dated, when raised       | `number`, `severity`, `tool`, `rule`, `path`, `category`, `ref`                                    | `alert_state`, `resolution`, `alerts`, `commit`, `line`, `cwe`, `seconds_to_resolve`, `url`                                                       |
 | `gh_code_scanning_analysis`   | dated, when the scan ran | `tool`, `version`, `ref`, `category`                                                               | `analyses`, `results`, `rules`, `commit`                                                                                             |
 | `gh_security_feature`         | now                      | `feature`                                                                                          | `enabled`, `open_alerts`, `alerts`, `url`                                                                                            |
 | `gh_security_setting` | now | `setting`, `status` | `enabled` |
@@ -760,7 +861,17 @@ is GitHub's own value for an alert about a whole file, not a missing reading.
 
 A Dependabot alert closes three ways, not two: `auto_dismissed_at` is how GitHub
 closes a development-dependency alert on its own, leaving the other two null.
-An alert closed that way used to grow `seconds_open` forever.
+An alert closed that way used to be counted as still open forever.
+
+An alert still open carries no field for how long it has been open, and that is
+deliberate. The row is dated when the alert was raised, so the answer is now()
+less the row's own timestamp and a panel computes it when it is asked. Written
+by the collector instead, as `seconds_open`, it was true only at the instant of
+the sweep that wrote it and it moved on every sweep: a reader querying last
+week got whatever the last sweep decided, and every rewrite filed another
+parquet file in the partition of the alert's original date. Measured on
+2026-09-17, the two alert families were writing about 234 files a day between
+them for 1,700 rows, whether or not GitHub had anything new to say.
 
 `gh_security_feature` exists so that no data and no alerts are distinguishable.
 Without it, a repository with Dependabot switched off looks exactly like one
@@ -777,27 +888,27 @@ page, so at most a hundred, rather than the repository's total.
 | `gh_contributions_total` | now                                  |                                                                       | `calendar_total`, `commits`, `pull_requests`, `reviews`, `issues`, `repositories`, `restricted`, `repos_with_commits`, `repos_with_issues`, `repos_with_pulls`, `repos_with_reviews`, `url`                                                                                               |
 | `gh_contribution_day`    | dated, one point per calendar day    |                                                                       | `contributions`, `level`, `url`                                                                                                                                                                                                                                                                    |
 | `gh_contribution_year` | dated, end of the year; the year in progress daily | `year` | `contributions`, `commits`, `issues`, `pull_requests`, `reviews`, `repositories`, `restricted`, `repos_with_commits`, `repos_with_issues`, `repos_with_pulls`, `repos_with_reviews`, `partial` |
-| `gh_contribution_repo` | now | `repo`, `kind` (commits, issues, pulls, reviews) | `contributions`, `commits`, `days`, `commits_dated`, `url` |
-| `gh_contribution_day_repo` | dated, the day the commits belong to | `repo`, `private`, `own` | `commits`, `url` |
+| `gh_contribution_repo` | now | `kind` (commits, issues, pulls, reviews) | `contributions`, `commits`, `days`, `commits_dated`, `url` |
+| `gh_contribution_day_repo` | dated, the day the commits belong to | `private`, `own` | `commits`, `url` |
 | `gh_commits_week`        | dated, the Sunday of its week        |                                                                       | `commits`, `owner_commits`                                                                                                                                                                                                                                                                |
 | `gh_commit_punchcard`    | now                                  | `weekday`, `hour`                                                     | `commits`                                                                                                                                                                                                                                                                                 |
-| `gh_package`             | now                                  | `package`, `type`, `visibility`, `repo`                               | `versions`, `tagged_versions`, `age_days`, `days_since_update`, `url`                                                                                                                                                                                                                     |
-| `gh_package_version`     | dated, when published                | `package`, `type`, `visibility`, `repo`, `tag`                        | `digest`, `published`, `url`                                                                                                                                                                                                                                                              |
+| `gh_package`             | now                                  | `package`, `type`, `visibility`                               | `versions`, `tagged_versions`, `age_days`, `days_since_update`, `url`                                                                                                                                                                                                                     |
+| `gh_package_version`     | dated, when published                | `package`, `type`, `visibility`, `tag`                        | `digest`, `published`, `url`                                                                                                                                                                                                                                                              |
 | `gh_gist`                | now                                  | `gist`, `public`                                                      | `files`, `comments`, `size_bytes`, `description`, `url`, `age_days`, `days_since_update`                                                                                                                                                                                                  |
 | `gh_achievement`         | daily                                | `achievement`                                                         | `name`, `tier_number`, `tier_name`, `present`, `image`, `url` |
 | `gh_achievement_progress` | daily                               | `achievement`                                                         | `name`, `count`, `tier_number`, `next_threshold`, `percent`, `page_tier`, `agrees`, `image`, `url` |
 | `gh_social_account`       | now; the `orcid` row daily          | `provider`                                                            | `url`, `present`                                                                                   |
-| `gh_pinned_item`         | now                                  | `repo`                                                                | `pinned`, `position`, `kind`, `stars`, `days_since_push`, `url`                                                                                                                                                                                                                           |
+| `gh_pinned_item`         | now                                  |                                                                       | `pinned`, `position`, `kind`, `stars`, `days_since_push`, `url`                                                                                                                                                                                                                           |
 | `gh_profile_flag`        | now                                  | `flag`                                                                | `enabled`, `message`, `age_days`, `url`                                                                                                                                                                                                                                                   |
 | `gh_sponsorship`         | dated, when the sponsorship was made | `direction` (sponsor, maintainer), `sponsorable`                      | `sponsorship`, `active`, `one_time`, `privacy`, `tier`, `amount_cents`, `url`                                                                                                                                                                                                             |
 | `gh_sponsors_listing`    | now                                  |                                                                       | `has_listing`, `listing_name`, `listing_public`, `listing_age_days`, `tiers`, `monthly_income_cents`, `next_payout_cents`, `next_payout_date`, `sponsor_spend_cents`, `lifetime_received_cents`, `sponsorships_received`, `goal_kind`, `goal_title`, `goal_target`, `goal_percent`, `url` |
 | `gh_sponsors_tier`       | daily                                | `tier`                                                                | `tiers`, `price_cents`, `one_time`, `retired`, `age_days`, `url`                                                                                                                                                                                                                          |
 | `gh_star_list`           | daily                                | `list`                                                                | `lists`, `items`, `private`, `name`, `age_days`, `days_since_add`, `url`                                                                                                                                                                                                                  |
 | `gh_account_total`       | now                                  |                                                                       | `pulls_opened`, `pulls_merged`, `pulls_open_now`, `pulls_merged_elsewhere`, `pulls_reviewed`, `issues_opened`, `issues_closed`, `issues_elsewhere`, `commented_elsewhere`, `commits`, `repositories`, `url`                                                                               |
-| `gh_repo_created`        | dated, when created                  | `repo`, `fork`                                                        | `created`, `private`, `url`                                                                                                                                                                                                                                                               |
+| `gh_repo_created`        | dated, when created                  | `fork`                                                        | `created`, `private`, `url`                                                                                                                                                                                                                                                               |
 | `gh_key`                 | daily                                | `kind` (ssh, gpg), `key`                                              | `keys`, `age_days`, `days_since_use`, `never_used`, `days_to_expiry`, `verified`, `revoked`, `can_sign`, `emails`, `url`                                                                                                                                                                  |
-| `gh_discussion_comment` | dated | `repo`, `own`, `is_answer`, `is_reply`, `author`, `comment`, `number` | `comments`, `answers`, `upvotes`, `title`, `reply_to`, `discussion_answered`, `discussion_answerable`, `discussion_closed`, `answered_by`, `answer_chosen_by`, `state_reason`, `category`, `seconds_to_answer`, `seconds_to_close`, `url` |
-| `gh_issue_comment`       | dated                                | `repo`, `own`, `number`                                               | `comments`, `url`                                                                                                                                                                                                                                                                         |
+| `gh_discussion_comment` | dated | `own`, `is_answer`, `is_reply`, `author`, `comment`, `number` | `comments`, `answers`, `upvotes`, `title`, `reply_to`, `discussion_answered`, `discussion_answerable`, `discussion_closed`, `answered_by`, `answer_chosen_by`, `state_reason`, `category`, `seconds_to_answer`, `seconds_to_close`, `url` |
+| `gh_issue_comment`       | dated                                | `own`, `number`                                               | `comments`, `url`                                                                                                                                                                                                                                                                         |
 
 `following` is the profile's own number, and it counts organisations as well as
 people. GraphQL's `following` connection counts only users, which on this
@@ -814,10 +925,16 @@ fallback tag GitHub publishes for each attestation and signature manifest:
 `sha256-` followed by the digest the row already carries. Nobody pulls one,
 there is a fresh one on every build, and excluding them halved the count on two
 packages, from a hundred and twenty six to fifty seven on one.
-`gh_package_version` no longer writes a row for one either.
+`gh_package_version` no longer writes a row for one either. A package GitHub
+attaches to no repository writes `(none)` in all three of the tags that name
+one, rather than leaving them out and landing in a series with no repository
+column for a query to name.
 
 `gh_pinned_item` and `gh_profile_flag` are the profile page itself as data. A
-pin has no date of its own, so both are stamped now. `position` is a field and
+pin has no date of its own, so both are stamped now. A pinned gist is not in a
+repository at all: GitHub names it by its hash, so `repo` is that hash and
+`owner` is the account, which is the only owner a pin can have. The `kind` field
+says which of the two a row is. `position` is a field and
 not a tag: a repository that moves from slot two to slot three is the same pin,
 and as a tag every rearrangement would fork the series. `flag` is a closed list
 of eight: `hireable`, `developer_program`, `campus_expert`, `github_star`,
@@ -990,8 +1107,8 @@ the two can be told apart.
 
 | Measurement       | Dated              | Tags                                                    | Fields                          |
 | ----------------- | ------------------ | ------------------------------------------------------- | ------------------------------- |
-| `gh_event`        | dated              | `type`, `repo`, `action`, `ref_type`                    | `events`, `public`, `commits`, `url` |
-| `gh_notification` | dated, last update | `reason`, `repo`, `private`, `subject_type`   | `is_unread`, `notifications`, `title`, `url` |
+| `gh_event`        | dated              | `type`, `action`, `ref_type`                    | `events`, `public`, `commits`, `url` |
+| `gh_notification` | dated, last update | `reason`, `private`, `subject_type`   | `is_unread`, `notifications`, `title`, `url` |
 
 Both are windows, not histories. GitHub keeps the last three hundred events
 whatever their dates and discards read notifications quickly. What is captured
@@ -1028,6 +1145,7 @@ guessed at, so a good part of the rows carry no link.
 | `gh_dependency_license` | daily                 | `license`                                       | `packages`                                                                                                                                                                                                                                                                                                                                               |
 | `gh_dependency_change`  | now                   | `change`, `ecosystem`                           | `packages`, `vulnerable`, `base`, `head`                                                                                                                                                                                                                                                                                                                 |
 | `gh_rate_limit`         | now                   | `resource`                                      | `limit`, `used`, `remaining`, `used_ratio`, `seconds_to_reset`, `own_cost`, `own_queries`                                                                                                                                                                                                                                                                |
+| `gh_collector_family`   | now                   | `family`, `scope` (family, repo), `reason`      | `repos`, `failed`, `points`, `error`                                                                                                                                                                                                                                                                                                                     |
 
 Webhooks fail silently. Measured, one hook had been answering 403 for
 seventy-eight of its last hundred deliveries and nothing anywhere said so.
@@ -1074,9 +1192,46 @@ is read only when that head moved: GitHub regenerates it on every request, so
 its ETag never matches and each read is charged from its own bucket, and a
 repository without a commit has the packages it had.
 
-`gh_rate_limit` is the only measurement the collector takes of itself. GitHub
-runs fifteen independent budgets, and without this a family skipped for want of
-budget looks exactly like a family with nothing to report.
+`gh_rate_limit` and `gh_collector_family` are what the collector measures of
+itself. The first is what it has left to spend: GitHub runs fifteen independent
+budgets, and without it a family skipped for want of budget looks exactly like a
+family with nothing to report.
+
+The second is what each sweep managed to do. One row per family it ran, always,
+with how many repositories it was asked about (`repos`), how many of them it
+could not collect (`failed`) and how many rows it produced (`points`); and one
+row more per repository it lost, naming that repository the way every other
+measurement names one and carrying `reason`, a bounded word for what stopped it
+(the HTTP status, `rate limited`, `query too large`, `canceled`), with the whole
+message in the `error` field. `scope` is what tells the two apart: `family` for
+the first kind, whose repository tags hold `(none)`, and `repo` for the second.
+`error` holds `(none)` too where there is no message, which is not decoration:
+the line protocol drops an empty string field, so a column written only on a
+failure would not exist at all until one happened, and a query naming it would
+be refused rather than answered with no rows.
+
+The rows that always arrive are the point of it. A family with no row at all in
+a sweep did not run in that sweep, which an empty panel could never say, and
+they are also what makes the measurement exist on an account where nothing has
+ever failed: a table InfluxDB has never been written to is not drawn empty, it
+is refused.
+
+One value of `family` is not a family. `discover` is the repository listing,
+which is not configurable and cannot be switched off, and it is here because
+every family depends on it: a sweep that cannot list the repositories runs none
+of them, and without this the page would show sixteen families that never ran
+and no reason for any of it. It writes a row only when it failed, because a
+listing that worked is already stated by every other row of the same sweep.
+
+This exists because of one measured failure. On 2026-09-16 `gh_workflow_run` and
+`gh_workflow_job` held nothing at all for the five busiest repositories of this
+account, each because one `/repos/<repo>/actions/runs/<id>/jobs` call had
+answered `502` once and the runner had thrown away everything that family had
+already collected for that repository. The Continuous integration row of the
+dashboard was computed over an account missing its five busiest repositories,
+the Cost row on the same page reported one of them burning 27.6 K macOS minutes,
+and the only record of the cause was one line in a journal. The collector keeps
+what it gathered before a failure now, and it writes down what failed.
 
 `GET /rate_limit` reports the budgets and charges for none of them, which is
 what makes almost all of this free. Not every one it reports is true: measured with the token this runs under, the endpoint answered
@@ -1158,11 +1313,23 @@ is still made here, by when the run finished.
 
 | Measurement        | Dated          | Tags                                    | Fields                                                          |
 | ------------------ | -------------- | --------------------------------------- | --------------------------------------------------------------- |
-| `gh_billing_usage` | dated, per day | `product`, `sku`, `unit`, `repo`, `org` | `quantity`, `price_per_unit`, `gross`, `discount`, `net`, `url` |
+| `gh_billing_usage` | dated, per day | `product`, `sku`, `unit` | `quantity`, `price_per_unit`, `gross`, `discount`, `net`, `url` |
 
 `unit` is GitHub's own `unitType`, capitalised as GitHub sends it: `Minutes`,
 `GigabyteHours`, `AICredits`, `Requests`. It is passed through rather than
 normalised, and the panels that read minutes filter on the capital.
+
+There is no `org` tag. The only billing endpoint a personal account can read is
+its own, and that report has no `organizationName`: the field belongs to the
+organization report, which needs an organization to ask about. Checked against
+the published OpenAPI description and against the live endpoint, where none of
+487 usage items carried the key. Written anyway it was `(none)` on every row
+ever collected, which is a column and a legend entry that only ever says there
+is nothing here.
+
+`repo` is `(none)` on a charge that belongs to no repository, which is what a
+Copilot seat is. That is a real row of the bill and not a repository, so the
+cost table by repository leaves it out; the spend totals above it include it.
 
 `net` is not always zero. On the account this was developed against it carries
 the monthly credit, which is why gross, discount and net are all stored rather
@@ -1193,3 +1360,29 @@ dismissed an alert typed a reason, and `gh_event.commits`, written only on a
 push event. Neither column exists on the production database this
 documentation was checked against. `gh_label` writes only the labels somebody
 has used; `gh_repo_total.labels` is the declared count.
+
+One of these is named by a shipped panel, and it is the one most likely to be
+missing: `gh_pull_request.seconds_to_first_human_review`, which exists only
+once somebody other than the author and other than a bot has reviewed a pull
+request. On a database where that has never happened, the stat that reads it
+reports a schema error rather than No data, and it takes the five values
+beside it in the same panel with it. Nothing in a query can ask whether a
+column exists, so this is a property of the store rather than a defect to
+repair: the repair, if it bites, is one row of any kind carrying the field.
+
+How rare it is, measured on 2026-09-17 against the account this was developed
+on: fourteen rows in the whole store, over fourteen pull requests of four
+repositories, the newest raised on 2026-07-05, and none of them inside the
+last fortnight, against 703 pull requests of 825 in that fortnight that had a
+first review from a bot or from their own author. The field is not broken; it
+is the answer to a narrower question than a reader expects, which is why the
+panel is named for that question.
+
+The same reading applies to the two on `gh_workflow_run`.
+`initial_actor` is written only when GitHub's `actor` and `triggering_actor`
+differ, which is a re-run somebody else asked for: 0 of 10,201 runs in a
+fortnight here, and 0 of the 300 newest runs of three repositories checked
+against the API at the same time. `head_repo` is written only for a run that
+came from another repository: 18 of those 10,201, all from one fork's pull
+request. Both are correct and both are rare, which is what a field written
+only when GitHub has something to say looks like.

@@ -19,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/jmrplens/ghchronicle/internal/httpx"
 )
 
 const (
@@ -106,7 +108,7 @@ func New(token string, timeout time.Duration) *Client {
 	// test server shutting down broke another test's request about one run in
 	// twenty.
 	return &Client{
-		http:  &http.Client{Timeout: timeout, Transport: ownTransport()},
+		http:  &http.Client{Timeout: timeout, Transport: httpx.OwnTransport()},
 		token: token,
 		base:  defaultBase,
 		cache: newCache(DefaultCacheBytes),
@@ -295,20 +297,6 @@ func newCache(limit int) *cache {
 	return &cache{limit: limit, order: list.New(), entries: map[cacheKey]*list.Element{}}
 }
 
-// ownTransport returns a transport with a connection pool nobody else holds.
-//
-// It is a clone of the standard default so that it keeps the default's proxy
-// settings, dial and handshake timeouts. A process that has installed some
-// other RoundTripper as http.DefaultTransport, an instrumented or a mocked
-// one, has nothing of that kind to clone, and a plain transport that still
-// honors the proxy variables is the closest thing to what the clone gives.
-func ownTransport() *http.Transport {
-	if standard, ok := http.DefaultTransport.(*http.Transport); ok {
-		return standard.Clone()
-	}
-	return &http.Transport{Proxy: http.ProxyFromEnvironment}
-}
-
 // pairAt returns the pair an element of the recency order holds, or nil.
 //
 // put is the only thing that adds to the order and it only ever adds a
@@ -484,6 +472,35 @@ func (e *RateLimitedError) Error() string {
 	return fmt.Sprintf("%s: the %s budget is spent until %s", e.Path, e.Resource, e.Reset.Format(time.TimeOnly))
 }
 
+// StatusError is an answer this package has no meaning of its own for: any
+// status at or above 300 that is not one of the four above.
+//
+// It exists so the status is a number a caller can group by rather than only
+// three words inside a message. Measured on the author's own account on
+// 2026-09-16: one transient 502 on /repos/<repo>/actions/runs/<id>/jobs, once
+// per repository, is what cost five repositories their entire workflow run and
+// job history, and the only record of it was a line in the journal that read
+// like every other line. The message is what it always was, so anything that
+// reads the text, isPaginationLimit for one, reads the same text.
+type StatusError struct {
+	// Path is the request, relative to the REST base.
+	Path string
+	// Code is the status as a number, for a caller that wants to group by it.
+	Code int
+	// Status is what the response called it, "502 Bad Gateway".
+	Status string
+	// Body is what came with it, trimmed and bounded, empty where the answer
+	// carried none.
+	Body string
+}
+
+func (e *StatusError) Error() string {
+	if e.Body == "" {
+		return fmt.Sprintf("%s: %s", e.Path, e.Status)
+	}
+	return fmt.Sprintf("%s: %s: %s", e.Path, e.Status, e.Body)
+}
+
 // NotReadyError means GitHub accepted the request and is computing the answer.
 // The four /stats/* endpoints do this: the first call returns 202 with an
 // empty body and the numbers appear on a later call. Collectors skip the
@@ -564,7 +581,10 @@ func (c *Client) GetJSON(ctx context.Context, path string, out any, accept strin
 	}
 	if resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return "", false, fmt.Errorf("%s: %s: %s", path, resp.Status, bytes.TrimSpace(b))
+		return "", false, &StatusError{
+			Path: path, Code: resp.StatusCode, Status: resp.Status,
+			Body: string(bytes.TrimSpace(b)),
+		}
 	}
 
 	raw, err := io.ReadAll(resp.Body)
@@ -676,6 +696,12 @@ func (c *Client) GetTextAs(ctx context.Context, path, accept string) (string, er
 
 	client := &http.Client{
 		Timeout: c.http.Timeout,
+		// The same pool as the client this request belongs to, rather than a
+		// nil Transport, which would send it through the process-wide
+		// default: a new client is built here for every request that may
+		// redirect, and each one would be borrowing connections from
+		// whatever else in the process is using that default.
+		Transport: c.http.Transport,
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
 			r.Header.Del("Authorization")
 			// The redirect itself is the API's answer and carries the rate
@@ -709,7 +735,7 @@ func (c *Client) GetTextAs(ctx context.Context, path, accept string) (string, er
 		return "", &UnavailableError{Path: path, Status: resp.StatusCode, Reason: "no log"}
 	}
 	if resp.StatusCode >= 300 {
-		return "", fmt.Errorf("%s: %s", path, resp.Status)
+		return "", &StatusError{Path: path, Code: resp.StatusCode, Status: resp.Status}
 	}
 	// Bounded: a job can print hundreds of megabytes and only the tail is kept
 	// anyway, so reading it all would be paying for nothing.

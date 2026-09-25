@@ -1,6 +1,6 @@
 ---
 title: Ways to install
-description: A page per operating system, four ways to get the binary running, and what each one is good for.
+description: A page per operating system, five ways to get the binary running, and what each one is good for.
 compactTables:
   - Command
 ---
@@ -44,12 +44,19 @@ keep it running once you are done watching it.
 ## Getting the binary
 
 <Tabs syncKey="install">
-  <TabItem label="Go">
+  <TabItem label="Script">
     ```sh
-    go install github.com/jmrplens/ghchronicle/cmd/ghchronicle@latest
+    curl -fsSL https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.sh | bash
     ```
 
-    Needs a Go toolchain, and builds from source at whatever the newest tag is.
+    On Windows, in PowerShell:
+
+    ```powershell
+    irm https://raw.githubusercontent.com/jmrplens/ghchronicle/main/install.ps1 | iex
+    ```
+
+    Either one works out the platform, takes the newest release, and refuses to
+    install anything whose checksum is not the one the release published.
 
   </TabItem>
   <TabItem label="Release">
@@ -59,9 +66,17 @@ keep it running once you are done watching it.
     ship as `tar.gz` (`zip` on Windows).
 
     ```sh
-    tar -xzf ghchronicle_1.0.0_linux_amd64.tar.gz
+    tar -xzf ghchronicle___VERSION___linux_amd64.tar.gz
     sudo install -m 755 ghchronicle /usr/local/bin/
     ```
+
+  </TabItem>
+  <TabItem label="Go">
+    ```sh
+    go install github.com/jmrplens/ghchronicle/cmd/ghchronicle@latest
+    ```
+
+    Needs a Go toolchain, and builds from source at whatever the newest tag is.
 
   </TabItem>
   <TabItem label="Container">
@@ -75,7 +90,7 @@ keep it running once you are done watching it.
   </TabItem>
   <TabItem label="Action">
     ```yaml
-    - uses: jmrplens/ghchronicle@v1
+    - uses: jmrplens/ghchronicle@v2
       with:
         token: ${{ secrets.GHCHRONICLE_TOKEN }}
         mode: once
@@ -92,8 +107,8 @@ keep it running once you are done watching it.
 
 The collector pushes to every store it supports, so it does not need to be
 reachable from anywhere. It needs to reach GitHub and to reach its databases.
-That is the only constraint, and it is what makes all four of these viable.
-Three of the four want a host you own: systemd, Docker and cron. GitHub Actions
+That is the only constraint, and it is what makes all five of these viable.
+Four of the five want a host you own: systemd, Docker and cron. GitHub Actions
 is the one that does not. The system pages above are where the scheduler lives,
 one per system: systemd or cron on Linux, launchd on macOS, a scheduled task on
 Windows.

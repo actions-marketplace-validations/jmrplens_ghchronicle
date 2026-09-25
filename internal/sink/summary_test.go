@@ -116,8 +116,8 @@ func TestSponsorshipsCountAndTiersDoNot(t *testing.T) {
 	}
 
 	rd := NewReducer()
-	first := rd.Reduce([]Point{paid, tier(day)})
-	second := rd.Reduce([]Point{paid, tier(day.AddDate(0, 0, 1))})
+	first, _ := rd.Reduce([]Point{paid, tier(day)})
+	second, _ := rd.Reduce([]Point{paid, tier(day.AddDate(0, 0, 1))})
 
 	var money, tiers *Point
 	for i := range second {
@@ -158,14 +158,14 @@ func TestReducerPublishesARunningTotal(t *testing.T) {
 			Fields:      map[string]any{"churn": 1}, Time: at,
 		}
 	}
-	first := rd.Reduce([]Point{pr(1, base), pr(2, base.Add(time.Hour))})
+	first, _ := rd.Reduce([]Point{pr(1, base), pr(2, base.Add(time.Hour))})
 	if first[0].Fields["total"] != 2 {
 		t.Fatalf("total after the first batch = %v, want 2", first[0].Fields["total"])
 	}
 	// The next sweep sees one of the same items again and one new one. The
 	// window count is two; the total is three, because an item seen twice is
 	// still one item.
-	second := rd.Reduce([]Point{pr(2, base.Add(time.Hour)), pr(3, base.Add(2*time.Hour))})
+	second, _ := rd.Reduce([]Point{pr(2, base.Add(time.Hour)), pr(3, base.Add(2*time.Hour))})
 	if second[0].Fields["count"] != 2 || second[0].Fields["total"] != 3 {
 		t.Errorf("count = %v total = %v, want 2 and 3", second[0].Fields["count"], second[0].Fields["total"])
 	}
@@ -186,11 +186,11 @@ func TestReducerCountsTheEventsAFoldedRowStandsFor(t *testing.T) {
 			Fields:      map[string]any{"events": events, "ref_name": "x"}, Time: at,
 		}
 	}
-	first := rd.Reduce([]Point{push(3, at), push(1, at.Add(time.Hour))})
+	first, _ := rd.Reduce([]Point{push(3, at), push(1, at.Add(time.Hour))})
 	if first[0].Fields["count"] != 2 || first[0].Fields["total"] != 4 {
 		t.Errorf("count = %v total = %v, want 2 rows standing for 4 pushes", first[0].Fields["count"], first[0].Fields["total"])
 	}
-	second := rd.Reduce([]Point{push(5, at)})
+	second, _ := rd.Reduce([]Point{push(5, at)})
 	if second[0].Fields["total"] != 6 {
 		t.Errorf("total = %v after the same row came back counting 5, want 6", second[0].Fields["total"])
 	}
@@ -198,7 +198,7 @@ func TestReducerCountsTheEventsAFoldedRowStandsFor(t *testing.T) {
 		Measurement: "gh_star", Tags: map[string]string{"repo": "a", "user": "u"},
 		Fields: map[string]any{"stars": 1}, Time: at,
 	}
-	if got := rd.Reduce([]Point{star}); got[0].Fields["total"] != 1 {
+	if got, _ := rd.Reduce([]Point{star}); got[0].Fields["total"] != 1 {
 		t.Errorf("a row without events is one item, total = %v", got[0].Fields["total"])
 	}
 }
@@ -206,14 +206,12 @@ func TestReducerCountsTheEventsAFoldedRowStandsFor(t *testing.T) {
 // measurementsInCollectors reads every measurement name the collectors write
 // out of their own source.
 //
-// The alternative list, the tags table in cmd/internal/dashboards, is a copy
+// The alternative list, the tags table in internal/dashboards, is a copy
 // and not a source: it is written by hand after the collector is, and it does
 // not even claim to name every measurement (gh_event is excluded on purpose,
 // its own comment says so, and gh_job_log is simply not in it), so a rule
-// missing for either would sail past a test built on it. Go's internal rule
-// settles it anyway: cmd/internal/... is importable only from cmd/..., so this
-// package cannot read that table at all. internal/collect is the thing that
-// decides what exists, so it is the thing to ask.
+// missing for either would sail past a test built on it. internal/collect is
+// the thing that decides what exists, so it is the thing to ask.
 func measurementsInCollectors(t *testing.T) map[string]string {
 	t.Helper()
 	const dir = "../collect"
@@ -708,7 +706,7 @@ func TestPromoteWritesEachKindOfFieldAsItsText(t *testing.T) {
 func TestReducerCountsARowWithoutAPositiveEventCountAsOne(t *testing.T) {
 	at := time.Date(2026, 9, 12, 7, 23, 54, 0, time.UTC)
 	for _, events := range []any{0, -2} {
-		out := NewReducer().Reduce([]Point{{
+		out, _ := NewReducer().Reduce([]Point{{
 			Measurement: "gh_repo_activity",
 			Tags:        map[string]string{"repo": "a", "activity": "push"},
 			Fields:      map[string]any{"events": events}, Time: at,

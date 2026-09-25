@@ -101,6 +101,25 @@ type options struct {
 	list     bool
 	showVer  bool
 	backfill bool
+	// setup asks what a working configuration needs and writes it, which is
+	// the shortest honest answer to "how do I start".
+	setup bool
+	// uninstall names what to take away, and yes is the word that makes it
+	// happen: without it the run prints the list and removes nothing, because
+	// the alternative is a typo that empties a store.
+	uninstall string
+	yes       bool
+	// publishDashboard reconciles the Grafana datasource and dashboard for
+	// every store this writes to, then exits. Like backfillStatus it asks
+	// GitHub nothing, so it needs no token.
+	publishDashboard bool
+	// backfillStatus reads the checkpoint and prints it, and is the one run
+	// that neither asks GitHub anything nor writes anywhere.
+	backfillStatus bool
+	// retry is how long a backfill waits before going back for the families a
+	// pass left behind. Zero never goes back, which is what it did before
+	// this existed.
+	retry    time.Duration
 	since    string
 	card     string
 	theme    string
@@ -134,6 +153,20 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 		"reach as far back as each surface allows, waiting for the rate limit to reset rather than stopping")
 	fs.StringVar(&o.since, "backfill-since", "",
 		"bound the backfill: a date (2024-01-01), a duration (720h), days (90d) or years (2y); empty means no bound")
+	fs.BoolVar(&o.setup, "setup", false,
+		"ask what a working configuration needs, check each answer, and write it")
+	fs.StringVar(&o.uninstall, "uninstall", "",
+		"remove what this put in place and exit: "+strings.Join(uninstallTargets, ", ")+
+			", comma separated; prints the list and removes nothing without -yes")
+	fs.BoolVar(&o.yes, "yes", false,
+		"go ahead with -uninstall rather than only listing what it would remove")
+	fs.BoolVar(&o.publishDashboard, "publish-dashboard", false,
+		"publish the Grafana dashboard and the datasource it reads from, then exit; "+
+			"needs the grafana section of the config and asks GitHub nothing")
+	fs.BoolVar(&o.backfillStatus, "backfill-status", false,
+		"print how far the backfill in progress has got, and exit; asks GitHub nothing and writes nothing")
+	fs.DurationVar(&o.retry, "backfill-retry", 0,
+		"after a backfill ends with families left, wait this long and go back for them, until a pass records nothing new; zero does not go back")
 	fs.StringVar(&o.card, "card", "", "run one sweep and write a summary SVG to this path")
 	fs.StringVar(&o.theme, "card-theme", "auto",
 		"card theme: dark, light, auto, or both to write the light card at -card and the dark one beside it with _dark before the extension")
@@ -189,7 +222,14 @@ func execute(args []string, stdout, stderr io.Writer) {
 		return
 	}
 
-	cfg, err := config.LoadWith(o.path, o.cardOnly)
+	if ranBeforeConfig(o, stdout, stderr) {
+		return
+	}
+
+	cfg, err := config.LoadWith(o.path, config.Relax{
+		NoSinks: o.cardOnly,
+		NoToken: o.backfillStatus || o.publishDashboard || o.uninstall != "",
+	})
 	if err != nil {
 		fatal(stderr, err)
 		return
@@ -208,10 +248,7 @@ func execute(args []string, stdout, stderr io.Writer) {
 	ctx, stop := notifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if o.list {
-		if err = listRepositories(ctx, api, cfg, stdout); err != nil {
-			fatal(stderr, err)
-		}
+	if reported(ctx, o, cfg, api, stdout, stderr) {
 		return
 	}
 
@@ -225,26 +262,14 @@ func execute(args []string, stdout, stderr io.Writer) {
 		return
 	}
 
-	// One sweep, one SVG. This is the shape a GitHub Action wants: run it on a
-	// schedule, commit the file into a profile README, and the card is drawn
-	// from the same points the databases get rather than from a second pass
-	// over the API.
-	var accumulator *render.Accumulator
-	if o.card != "" {
-		accumulator = render.NewAccumulator(cfg.Targets.User)
-		if o.cardOnly {
-			// Nothing else runs, so a card can be produced with no database
-			// configured at all.
-			sinks = []sink.Sink{accumulator}
-		} else {
-			sinks = append(sinks, accumulator)
-		}
-	}
+	accumulator, sinks := withCard(cfg, o, sinks)
 	defer func() {
 		for _, s := range sinks {
 			_ = s.Close()
 		}
 	}()
+
+	publishOnStart(ctx, cfg, o, logger)
 
 	runner := newRunner(cfg, api, sinks, logger, &o)
 	switch {
@@ -400,8 +425,233 @@ func newAPI(cfg *config.Config, backfill bool, logger *slog.Logger) *ghapi.Clien
 	return api
 }
 
+// reported runs the flags that answer a question and return, and says whether
+// one of them did.
+//
+// Together rather than as two branches of execute, which each new one would
+// grow by two: they have the same shape, they write to stdout, and the run
+// ends after them.
+// ranBeforeConfig handles the modes that come before the configuration is
+// read, and says whether one of them did.
+//
+// Only -setup so far, and its whole reason is that one: the ordinary time to
+// run it is when there is no configuration yet, so loading one first would
+// refuse the very case it exists for.
+func ranBeforeConfig(o options, stdout, stderr io.Writer) bool {
+	if !o.setup {
+		return false
+	}
+	if err := setupFrom(context.Background(), o, os.Stdin, stdout); err != nil {
+		fatal(stderr, err)
+	}
+	return true
+}
+
+// withCard adds the thing that draws the SVG to the destinations, when one
+// was asked for.
+//
+// One sweep, one SVG. This is the shape a GitHub Action wants: run it on a
+// schedule, commit the file into a profile README, and the card is drawn from
+// the same points the databases get rather than from a second pass over the
+// API.
+func withCard(cfg *config.Config, o options, sinks []sink.Sink) (*render.Accumulator, []sink.Sink) {
+	if o.card == "" {
+		return nil, sinks
+	}
+	accumulator := render.NewAccumulator(cfg.Targets.User)
+	if o.cardOnly {
+		// Nothing else runs, so a card can be produced with no database
+		// configured at all.
+		return accumulator, []sink.Sink{accumulator}
+	}
+	return accumulator, append(sinks, accumulator)
+}
+
+func reported(ctx context.Context, o options, cfg *config.Config,
+	api *ghapi.Client, stdout, stderr io.Writer,
+) bool {
+	var err error
+	switch {
+	case o.backfillStatus:
+		// This run asks GitHub nothing: it reads the file a backfill leaves
+		// behind and prints it.
+		err = reportBackfill(cfg, o.path, stdout, time.Now())
+	case o.publishDashboard:
+		// This one asks GitHub nothing either. It talks to Grafana instead.
+		err = publishDashboards(ctx, cfg, stdout)
+	case o.uninstall != "":
+		// Nor this one, which takes away rather than collects.
+		err = uninstall(ctx, cfg, o.uninstall, o.yes, stdout)
+	case o.list:
+		err = listRepositories(ctx, api, cfg, stdout)
+	default:
+		return false
+	}
+	if err != nil {
+		fatal(stderr, err)
+	}
+	return true
+}
+
 // listRepositories prints what a sweep would collect and collects nothing.
-// The archived repositories the filter sets aside follow, marked, because a
+// retryLimit is how many passes a backfill will make in one run.
+//
+// A backstop and not a tuning knob: what actually stops a retrying backfill is
+// a pass that records nothing new, and that catches the case worth catching,
+// which is an obstacle no amount of waiting clears. This is here so that a
+// walk which creeps forward by one repository a pass cannot run for a week
+// unattended.
+const retryLimit = 10
+
+// verdict is what to do after a backfill pass.
+type verdict int
+
+const (
+	// stop: the walk covered everything, or it was stopped, or going back was
+	// never asked for.
+	stop verdict = iota
+	// stuck: the pass recorded nothing new, so waiting will not help.
+	stuck
+	// atLimit: there is work left and passes have run out.
+	atLimit
+	// again: wait, then go back for what is left.
+	again
+)
+
+// afterPass decides what a backfill does once a pass has ended.
+//
+// A function of its own, and of four plain values, because this is the whole
+// of the thinking: the loop around it only waits. stopped is a run that was
+// asked to end, left is the families the checkpoint still does not hold,
+// retry is what the reader asked for, and gained says the pass recorded
+// something it had not before.
+//
+// It decides by what the checkpoint gained rather than by the errors the pass
+// reported. Sorting errors into the transient and the permanent means a list
+// that is wrong the moment GitHub answers something new; "did this pass record
+// anything" needs no list and answers the question that matters, which is
+// whether coming back has any chance of helping.
+func afterPass(stopped bool, left []string, retry time.Duration, gained bool, passes int) verdict {
+	switch {
+	case stopped || len(left) == 0 || retry <= 0:
+		return stop
+	case !gained:
+		return stuck
+	case passes >= retryLimit:
+		return atLimit
+	default:
+		return again
+	}
+}
+
+// walkUntilDoneOrStuck runs the walk, and for as long as retry asks, goes back
+// for whatever a pass left behind.
+//
+// A pass can end with families left and no error at all: a family truncated by
+// a secondary rate limit is handed back as a pass, and one that failed on every
+// repository is deliberately left unmarked. Both are usually a bad few minutes
+// at the other end rather than anything about this account, and the checkpoint
+// makes going back cheap, because a resume walks only what it does not already
+// hold.
+func walkUntilDoneOrStuck(ctx context.Context, runner *run.Runner,
+	retry time.Duration, logger *slog.Logger,
+) error {
+	for passes := 1; ; passes++ {
+		families, repos := runner.Progress.Recorded()
+		if err := runner.Once(ctx); err != nil && ctx.Err() == nil {
+			return err
+		}
+		left := runner.Progress.Unfinished()
+		after, afterRepos := runner.Progress.Recorded()
+		gained := after != families || afterRepos != repos
+		switch afterPass(ctx.Err() != nil, left, retry, gained, passes) {
+		case stop:
+			return nil
+		case stuck:
+			logger.Info("this pass recorded nothing new, so waiting will not help; not going back again",
+				"families_left", strings.Join(left, ","), "passes", passes)
+			return nil
+		case atLimit:
+			logger.Warn("stopping after the pass limit, with families still left",
+				"families_left", strings.Join(left, ","), "passes", passes,
+				"resume", "run the same command again")
+			return nil
+		case again:
+		}
+		logger.Info("waiting before going back for the families this pass left",
+			"families_left", strings.Join(left, ","), "waiting", retry.String(), "pass", passes+1)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(retry):
+		}
+		// The pass just run marked the families it collected, so without this
+		// the next one honors those cadences and skips the family it came
+		// back for.
+		runner.PrimeAgain()
+	}
+}
+
+// reportBackfill prints how far the backfill in progress has got.
+//
+// It reads the checkpoint and nothing else: no request, no sink, no write, and
+// no checkpoint created for a walk nobody is running. The file was always
+// meant to be read, and until this existed reading it meant knowing the path
+// and parsing JSON by hand.
+//
+// Success either way. "There is no backfill in progress" is an answer, and a
+// status command that exits non-zero for an ordinary state is one nobody can
+// put in a script.
+func reportBackfill(cfg *config.Config, configPath string, stdout io.Writer, now time.Time) error {
+	path := cfg.BackfillProgressFile()
+	progress, inProgress, err := run.ReadProgress(path)
+	if err != nil {
+		return err
+	}
+	if !inProgress {
+		fmt.Fprintln(stdout, "no backfill in progress")
+		fmt.Fprintf(stdout, "  the checkpoint one leaves behind is not there: %s\n", shownPath(path))
+		return nil
+	}
+
+	left := progress.Unfinished()
+	families, inFlight, repos := progress.Where()
+	fmt.Fprintln(stdout, "backfill in progress")
+	fmt.Fprintf(stdout, "  started      %s (%s ago)\n",
+		progress.Started.Format(time.RFC3339), since(progress.Started, now))
+	fmt.Fprintf(stdout, "  last written %s ago\n", since(progress.Updated, now))
+	fmt.Fprintf(stdout, "  families     %d of %d complete\n", families, len(progress.Scope.Families))
+	if inFlight != "" {
+		fmt.Fprintf(stdout, "  in flight    %s, %d repositories written\n", inFlight, repos)
+	}
+	if len(left) > 0 {
+		fmt.Fprintf(stdout, "  left         %s\n", strings.Join(left, ", "))
+	}
+	fmt.Fprintf(stdout, "  written by   %s\n", progress.WrittenBy)
+	fmt.Fprintf(stdout, "  checkpoint   %s\n", path)
+	fmt.Fprintf(stdout, "  resume       ghchronicle -config %s -backfill\n", configPath)
+	return nil
+}
+
+// since is how long ago an instant was, rounded to the second, and never
+// negative: a clock that moved backwards is not worth reporting as the future.
+func since(then, now time.Time) time.Duration {
+	d := now.Sub(then).Round(time.Second)
+	if d < 0 {
+		return 0
+	}
+	return d
+}
+
+// shownPath names the file, or says there is none to name: a configuration
+// with no state file keeps no checkpoint, and "" in a sentence reads as a bug.
+func shownPath(path string) string {
+	if path == "" {
+		return "there is none, because this configuration sets no state_file"
+	}
+	return path
+}
+
 // sweep still writes the one row each has, the date it was archived, and a
 // backfill collects them in full.
 func listRepositories(ctx context.Context, api *ghapi.Client, cfg *config.Config, stdout io.Writer) error {
@@ -427,7 +677,8 @@ func listRepositories(ctx context.Context, api *ghapi.Client, cfg *config.Config
 // which case it stops where the API does.
 //
 // A sweep cut short by a signal is not a failure: what it reached is written,
-// and the log says the backfill finished.
+// the checkpoint keeps the repositories it had already delivered, and the log
+// says where it stopped. Running the same command again carries on from there.
 func runBackfill(ctx context.Context, runner *run.Runner, cfg *config.Config,
 	accumulator *render.Accumulator, o *options, logger *slog.Logger,
 ) error {
@@ -444,20 +695,44 @@ func runBackfill(ctx context.Context, runner *run.Runner, cfg *config.Config,
 	if err != nil {
 		return err
 	}
+	// Opened before anything is collected, because the one thing it can say is
+	// that this walk must not be resumed, and a refusal is only worth
+	// something before the quota is spent. The bound goes in as it was
+	// spelled, not as it just resolved: see run.Scope.
+	if runner.Progress, err = run.OpenProgress(
+		cfg.BackfillProgressFile(), version, run.ScopeOf(cfg, bound), time.Now(),
+	); err != nil {
+		return err
+	}
 	if runner.BackfillSince.IsZero() {
 		logger.Info("backfill has no lower bound; it stops where the API does")
 	} else {
 		logger.Info("backfill bounded", "since", runner.BackfillSince.Format("2006-01-02"))
 	}
-	logger.Info("backfill starting, this reaches as far back as GitHub allows and may take a while")
-	if err = runner.Once(ctx); err != nil && ctx.Err() == nil {
-		return err
+	logger.Info("backfill starting, this reaches as far back as GitHub allows and may take a while",
+		"checkpoint", runner.Progress.Path())
+	// Its own name: reusing err here is a re-assignment one linter wants
+	// written as a declaration and another reads as shadowing the one above.
+	if walked := walkUntilDoneOrStuck(ctx, runner, o.retry, logger); walked != nil {
+		return walked
 	}
 	logger.Info("backfill finished")
 	// A backfill asked for a card draws it from what the backfill collected,
 	// the same way a sweep does, and a backfill cut short by a signal draws it
 	// from what it reached: its points have been written, and a card is a
 	// picture of those points.
+	//
+	// A resumed one is the case where that sentence needs saying out loud. The
+	// accumulator is a sink, so it holds what this process collected and not
+	// what the process before it did: the families the first half finished are
+	// skipped, and the card is drawn without them. Said rather than refused,
+	// because a partial card is still a picture of real points and the reader
+	// is the one who knows whether that will do.
+	if o.card != "" && runner.Progress.Resumed() {
+		logger.Warn("this card is drawn from the part of the walk this process did; "+
+			"the families the walk it resumes had already finished are not in it",
+			"complete_before_this_process", len(runner.Progress.Complete))
+	}
 	return writeCards(accumulator, files, o, logger)
 }
 
@@ -643,6 +918,9 @@ func buildSinks(cfg *config.Config, log *slog.Logger, oneShot bool) ([]sink.Sink
 	}
 	if s := cfg.Sinks.SQL; s != nil {
 		out = append(out, sink.OnlyChanged(sink.NewSQL(s.Dialect, s.Path, s.MaxBytes, s.Keep), dedupe(s.Dedupe)))
+	}
+	if s := cfg.Sinks.Postgres; s != nil {
+		out = append(out, sink.OnlyChanged(sink.NewPostgres(s.DSN, s.Batch), dedupe(s.Dedupe)))
 	}
 	if e := cfg.Sinks.Elasticsearch; e != nil {
 		es := sink.NewElasticsearch(e.URL, e.Prefix, e.Username, e.Password, e.APIKey, e.Batch, cfg.GitHub.HTTPTimeout())

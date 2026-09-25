@@ -5,6 +5,7 @@ import sitemap from "@astrojs/sitemap";
 import { unified } from "@astrojs/markdown-remark";
 import starlightLinksValidator from "starlight-links-validator";
 import rehypeMermaid from "rehype-mermaid";
+import remarkVersion from "./src/lib/remark-version.mjs";
 import rehypeTables from "./src/lib/rehype-tables.mjs";
 import rehypeIntegerDimensions from "./src/lib/rehype-integer-dimensions.mjs";
 import rehypeDecodedFragments from "./src/lib/rehype-decoded-fragments.mjs";
@@ -26,7 +27,15 @@ const siteBase = "/ghchronicle";
 // already use. Every absolute link written OUTSIDE the site, the README, the
 // generated docs/, the issue templates, the dashboards, uses this one; the
 // site's own internal links stay relative and never see it.
-const publicDocs = "https://jmrp.io/docs/ghchronicle";
+//
+// Exported, and nothing in this file reads it. Its consumer is
+// scripts/gen-docs.mjs, which reads this declaration out of the file as text
+// rather than importing it, because importing this module would start Astro.
+// The export is what says out loud that the constant is used from outside;
+// without it the only honest reading is that it is dead, and deleting it
+// leaves gen-docs.mjs throwing "astro.config.mjs declares no public docs URL"
+// on the next `make docs`.
+export const publicDocs = "https://jmrp.io/docs/ghchronicle";
 
 /**
  * The newest git commit date for the file behind a sitemap URL, so
@@ -105,6 +114,10 @@ export default defineConfig({
 	markdown: {
 		syntaxHighlight: false, // expressive-code owns it
 		processor: unified({
+			// The version the install pages quote, put in from the VERSION
+			// file. Before the fences are highlighted, because that is where
+			// nearly every one of them sits: see remark-version.mjs.
+			remarkPlugins: [remarkVersion],
 			rehypePlugins: [
 				rehypeTables,
 				[
@@ -487,6 +500,17 @@ export default defineConfig({
 							translations: { es: "Resolución de problemas" },
 							slug: "reference/troubleshooting",
 						},
+					],
+				},
+				{
+					// Not Reference. What is under Reference is looked up by
+					// somebody using this; what is here is only of use to
+					// somebody changing it, and a reader who wandered into the
+					// test layers looking for how to configure a sink was
+					// reading the wrong page for an honest reason.
+					label: "Working on it",
+					translations: { es: "Trabajar en ello" },
+					items: [
 						{
 							label: "The test layers",
 							translations: { es: "Las capas de prueba" },

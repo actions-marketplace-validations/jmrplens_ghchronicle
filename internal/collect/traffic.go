@@ -33,7 +33,7 @@ type trafficCount struct {
 }
 
 func (Traffic) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now time.Time) ([]sink.Point, error) {
-	base := map[string]string{"owner": repo.Owner, "repo": repo.Name, "full_name": repo.FullName}
+	base := repoTags(repo.Owner, repo.Name)
 	// GitHub's own traffic graph, which is the page these numbers vanish from
 	// after fourteen days.
 	graph := githubPage(repo.FullName, "graphs", "traffic")
@@ -65,7 +65,7 @@ func (Traffic) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now time
 	}
 	if _, _, err := c.GetJSON(ctx, repoPathPrefix+repo.FullName+"/traffic/clones", &clones, ""); err != nil {
 		if !isSkippable(err) {
-			return nil, err
+			return points, err
 		}
 	}
 	for _, v := range clones.Clones {
@@ -94,7 +94,7 @@ func (Traffic) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now time
 	}
 	if _, _, err := c.GetJSON(ctx, repoPathPrefix+repo.FullName+"/traffic/popular/referrers", &referrers, ""); err != nil {
 		if !isSkippable(err) {
-			return nil, err
+			return points, err
 		}
 	}
 	for _, r := range referrers {
@@ -122,7 +122,7 @@ func (Traffic) Collect(ctx context.Context, c *ghapi.Client, repo Repo, now time
 	}
 	if _, _, err := c.GetJSON(ctx, repoPathPrefix+repo.FullName+"/traffic/popular/paths", &paths, ""); err != nil {
 		if !isSkippable(err) {
-			return nil, err
+			return points, err
 		}
 	}
 	for _, p := range paths {

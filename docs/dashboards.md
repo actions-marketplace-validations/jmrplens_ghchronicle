@@ -14,16 +14,16 @@ importer to choose their own.
 
 | File                             | Panels | Store                                                    |
 | -------------------------------- | ------ | -------------------------------------------------------- |
-| `ghchronicle-influxdb.json`      | 152 | InfluxDB 3, queried with SQL                             |
-| `ghchronicle-prometheus.json`    | 152 | Prometheus                                               |
-| `ghchronicle-postgres.json`      | 152 | PostgreSQL or TimescaleDB, from the SQL sink             |
-| `ghchronicle-graphite.json`      | 152 | Graphite, from the Graphite sink                         |
-| `ghchronicle-elasticsearch.json` | 152 | Elasticsearch or OpenSearch, from the Elasticsearch sink |
+| `ghchronicle-influxdb.json`      | 154 | InfluxDB 3, queried with SQL                             |
+| `ghchronicle-prometheus.json`    | 154 | Prometheus                                               |
+| `ghchronicle-postgres.json`      | 154 | PostgreSQL or TimescaleDB, from the SQL sink             |
+| `ghchronicle-graphite.json`      | 154 | Graphite, from the Graphite sink                         |
+| `ghchronicle-elasticsearch.json` | 154 | Elasticsearch or OpenSearch, from the Elasticsearch sink |
 
 The five hold the same panels in the same order. What differs is how many of
 them the store behind each one can answer.
 
-Each cell is the panels that store answers with a query, out of the panels in that section. A panel a store cannot answer ships as a text panel with the same title, so every dashboard has the same 152 panels; the 2 that are prose in all five are left out here.
+Each cell is the panels that store answers with a query, out of the panels in that section. A panel a store cannot answer ships as a text panel with the same title, so every dashboard has the same 154 panels; the 2 that are prose in all five are left out here.
 
 | Section | InfluxDB | PostgreSQL | Elasticsearch | Graphite | Prometheus | Panels |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -43,8 +43,8 @@ Each cell is the panels that store answers with a query, out of the panels in th
 | Activity | 9 | 9 | 9 | 8 | 7 | 9 |
 | Inventory | 16 | 16 | 15 | 15 | 14 | 16 |
 | Profile and sponsorship | 8 | 8 | 8 | 8 | 8 | 8 |
-| The collector itself | 2 | 2 | 2 | 2 | 2 | 2 |
-| **Total** | **150** | **150** | **145** | **144** | **126** | **150** |
+| The collector itself | 4 | 4 | 4 | 4 | 4 | 4 |
+| **Total** | **152** | **152** | **147** | **146** | **128** | **152** |
 
 ![The InfluxDB dashboard over ninety days of the demonstration database: the repository picker and the range across the top, the Overview with the ghchronicle badge and four tile groups reading 5 repositories with 350 stars and 51 forks, 37.5 thousand views with 21.1 thousand unique visitors and 19.6 thousand clones, 117 followers and 58 following with 4 sponsors and 2 sponsored, and 3.22 thousand contributions over 7.78 years, then the collapsed Lifetime header and the Audience section with views, unique visitors and clones per day, the top referrers, the top paths and clone amplification](../site/src/assets/dashboard-influxdb-demo.png)
 
@@ -52,6 +52,185 @@ The account in that capture is the invented one every capture in this
 documentation uses, `acme` and five repositories, described beside [what the
 panels show](https://jmrp.io/docs/ghchronicle/dashboards/panels/). Every section but the Overview
 ships collapsed, which is why Lifetime is a header there.
+
+### Letting the binary do it
+
+The dashboard is built from the same code the binary carries, so the binary can
+publish it. Given a Grafana, it reconciles the datasource out of the sink it
+already writes to, asks that datasource whether it can actually be reached, and
+publishes the dashboard for every store it writes to.
+
+```yaml
+grafana:
+  url: http://localhost:3000
+  token: ${GRAFANA_TOKEN}
+```
+
+```sh
+ghchronicle -config config.yaml -publish-dashboard
+```
+
+It asks GitHub nothing, so it needs no GitHub token, and it prints what it did
+to each datasource and each dashboard.
+
+> **A password from the machine is not copied**
+>
+> pgx reads libpq's environment and its password file, which is what the sink
+> wants, because it is the thing connecting. A datasource is different: it is
+> written into a Grafana other people can see, so only a password the DSN
+> itself carries is sent. One that came from `PGPASSWORD` or a `.pgpass` on
+> whichever machine ran the publish is named in a line and left where it is.
+
+<!-- -->
+
+> **What the token has to be allowed to do**
+>
+> Publishing a dashboard needs an Editor. Creating or correcting a datasource
+> needs `datasources:create`, which an Editor does not have: a token without it
+> gets as far as the dashboard and is refused on the datasource, saying which
+> permission is missing. So a service account that manages its own datasource
+> is an Admin, or an Editor granted that permission; one that only publishes
+> against a datasource named in `grafana.datasource.uid` is an Editor, because
+> adopting reads and never writes.
+
+<!-- -->
+
+> **Grafana often reaches the store by another address**
+>
+> The address the collector writes to and the address Grafana queries are
+> frequently not the same one: a collector on the host writes to a published
+> port while Grafana in a container reaches the same store by its name on the
+> container network. Copying the sink's address across produces a datasource
+> Grafana accepts and cannot use, so the run asks it before publishing and
+> refuses on a datasource that does not answer. `grafana.datasource.url` is the
+> address to use instead.
+
+Three of the five sinks describe their own datasource with nothing else said,
+because what they write to is what Grafana queries: InfluxDB, Elasticsearch,
+and the PostgreSQL sink that connects, whose DSN carries the server, the
+database, the user and, when the DSN itself writes one, the password.
+
+Two more need the address and nothing else, because they write somewhere that
+is not where a query goes: the Prometheus sink is scraped rather than written
+to, and the Graphite sink speaks the ingest port while Grafana asks the web API
+on another port. Give those the address and the datasource is made the same
+way:
+
+```yaml
+grafana:
+  datasource:
+    url: http://prometheus:9090
+```
+
+What cannot be described at all is the SQL sink, the one that writes statements
+to a file: it never connects, so no host, port, user or password exists
+anywhere in its config. That one, and any datasource you would rather manage
+yourself, is named instead:
+
+```yaml
+grafana:
+  datasource:
+    uid: ae3x9k2
+```
+
+A datasource named that way is adopted and left exactly as it is, since
+correcting one this did not make would overwrite settings nobody asked it to
+have.
+
+`publish_on_start: true` does the same once when the collector starts, before
+the first sweep. It is off by default, and it is what keeps a server from
+quietly falling behind the binary feeding it: the dashboard is generated from
+the code, so updating the binary updates the dashboard. A failure there warns
+and the sweep goes on, because the metrics of an hour spent not running cannot
+be recovered and a dashboard published on the next restart can.
+
+#### What it makes, and under which names
+
+Nothing here is assigned by Grafana, so there is nothing to read back out of it
+and write into your config. Both uids are worked out from the store's name, and
+the same run twice writes to the same two places:
+
+| Store           | Dashboard uid               | Its datasource                  |
+| --------------- | --------------------------- | ------------------------------- |
+| `influxdb`      | `ghchronicle-influxdb`      | made, from the sink             |
+| `elasticsearch` | `ghchronicle-elasticsearch` | made, from the sink             |
+| `postgres`      | `ghchronicle-postgres`      | made, from the dsn              |
+| `prometheus`    | `ghchronicle-prometheus`    | made, once you give the address |
+| `graphite`      | `ghchronicle-graphite`      | made, once you give the address |
+
+A datasource this makes takes the dashboard's uid, so both are
+`ghchronicle-<store>`, and one you name yourself keeps whatever uid it has.
+A Loki datasource, when the sink's address explains where to find one, is
+`ghchronicle-loki`.
+
+The datasource is created the first time and corrected afterwards, and only the
+fields this writes are compared, so a timeout or a description you set on it
+yourself is left alone. One carrying a credential is written on every run,
+because Grafana reports which secrets are set and never their values: a token
+you rotate in the config cannot be seen from the outside, and writing it is the
+only way to be sure the datasource is not still using the old one.
+
+The dashboard is published with `overwrite`, so the second run updates the first
+rather than adding another. That is what makes `publish_on_start` safe to leave
+on.
+
+A run also names what it finds under a uid it no longer writes to. Changing
+which store the collector feeds is the case that leaves one: the old store's
+dashboard and datasource stay where they are, pointing at something nobody
+fills, and the new store's uid is a different string, so nothing overwrites
+them. The note says which uid and which store, and stops there. Deleting a
+dashboard unasked is not something a collector should do, even one it made: it
+may be the copy still being read, or one edited since.
+
+#### If the dashboard is already somewhere else
+
+Importing the JSON through the UI keeps the uid the file carries, so a dashboard
+imported that way is the one this writes over and there is nothing to do. It is
+only different if Grafana was asked to import it as new, or if the uid was
+changed by hand: then the generated uid is free, a publish makes a second
+dashboard beside the one being looked at, and the one open stops being the one
+updated. Name the existing one and it is written instead:
+
+```yaml
+grafana:
+  dashboard_uid: my-existing-dashboard
+```
+
+#### Taking it all away again
+
+`-uninstall` removes what this put in place, and only that. It takes the list
+of what to remove, and without `-yes` it removes nothing and prints what it
+would, because the alternative is one typed command that empties a store.
+
+```sh
+ghchronicle -config config.yaml -uninstall all          # says what would go
+ghchronicle -config config.yaml -uninstall all -yes     # and then goes
+```
+
+| Target      | What goes                                                            |
+| ----------- | -------------------------------------------------------------------- |
+| `dashboard` | The dashboards it published, and a datasource it created              |
+| `data`      | Every table in the store whose name starts with `gh_`                 |
+| `state`     | The state file, the dedupe ledger and the backfill checkpoint         |
+| `all`       | The three above                                                       |
+
+A datasource named in `grafana.datasource.uid` is never removed: it was
+somebody else's before this ran and it stays theirs. A target it does not
+recognise is refused whole, rather than the rest of the list being carried out
+without it.
+
+The tables are asked of the store rather than compiled in. A list inside the
+binary would be the measurements this version writes, and the ones worth
+removing are exactly the ones nobody writes any more: what an older version
+collected, or a family switched off since. Asking finds those.
+
+Not every store can be emptied from here, and the ones that cannot say why
+rather than staying silent, which would read as nothing to remove. Graphite
+offers no delete, so its whisper files go by hand. The Prometheus sink is
+scraped rather than written to, so nothing was stored to remove. The SQL sink's
+file is removed, but rows already loaded from it into a real database were
+loaded by you and have to go there: this sink emits statements and never
+connects.
 
 ### Importing from the UI
 
@@ -113,41 +292,15 @@ Grafana is fine, because the uids differ per store and cannot collide.
 
 ### They are generated, never hand-edited
 
-`cmd/internal/dashboards` holds one ordered list of sections and panels, and
-every panel carries one query set per store. The generator picks one set and
-emits the JSON, so every file has the same panels in the same places with the
-same titles, and it refuses to write files whose layouts have drifted apart.
+One list of sections and panels produces all five, so a panel that is fixed is
+fixed everywhere and a store that is added inherits the lot. What that means
+for you is the part worth knowing: a dashboard edited in Grafana is yours until
+the next publish overwrites it, so keep changes in a copy under a uid of your
+own and name it in `grafana.dashboard_uid`.
 
-```sh
-go run ./cmd/gen_dashboards          # writes all five files
-go run ./cmd/gen_dashboards -check   # writes nothing, fails if they are stale
-```
-
-Edit `cmd/internal/dashboards/sections_*.go`, not the JSON. `panels.go` holds
-the panel constructors it uses, `query.go` the query helpers for each store,
-and `stores.go` only chooses a query set and a datasource.
-
-> **No builder is trusted without running the queries**
->
-> The raw database API accepts things the Grafana plugin then fails to render, so
-> the checkers go through Grafana's own query path where a datasource exists.
->
-> ```sh
-> GRAFANA_TOKEN=... go run ./cmd/check_dashboards influxdb <datasource-uid>
-> GRAFANA_TOKEN=... go run ./cmd/check_prometheus <metrics-dump> <datasource-uid>
-> go run ./cmd/check_postgres <schema.json>
-> ```
->
-> `check_dashboards` reports every panel as ok, empty or failing.
-> `check_prometheus` additionally checks each metric name against a live dump of
-> the exporter's own `/metrics`, because a typo in a metric name is not a syntax
-> error: PromQL parses it happily and returns nothing forever.
->
-> Both of them, and `cmd/publish_dashboard`, read two variables: `GRAFANA_TOKEN`
-> for the credential, and `GRAFANA_URL` for the server. The compiled-in default
-> is `http://localhost:3000`, which is the address Grafana itself ships with, so
-> anything else has to be named: the first symptom of not naming it is a
-> connection refused.
+How the generator works, and the checks that keep the committed files and the
+panels' own queries in step, are in
+[CONTRIBUTING](https://github.com/jmrplens/ghchronicle/blob/main/CONTRIBUTING.md).
 
 ### Publishing to the Grafana directory
 
@@ -173,12 +326,12 @@ in the repository.
 
 ## What they show
 
-The seventeen sections and their one hundred and fifty two panels, one capture each, and what changes when the store cannot answer.
+The seventeen sections and their one hundred and fifty four panels, one capture each, and what changes when the store cannot answer.
 
 Source: <https://jmrp.io/docs/ghchronicle/dashboards/panels/>
 
 One dashboard, rendered once per store. Seventeen sections, one hundred and
-fifty two panels, in the same places with the same titles whichever database
+fifty four panels, in the same places with the same titles whichever database
 you chose. One capture per section below, in the order the dashboard puts them.
 
 Every section but the Overview opens collapsed. Open, the first seven were
@@ -208,7 +361,7 @@ than all of them.
 A masthead rather than a panel: the mark, large and centered, the name under
 it, and under the name a button to this documentation and one to the source,
 on the page itself with no box around them. Then four groups of numbers: Repositories (repositories, stars,
-forks), Traffic in range (views, unique visitors, clones), Community
+forks), Traffic in range (views, unique visitors, unique cloners), Community
 (followers, following, sponsors, sponsoring) and Account (contributions in the
 last year, account age, watching, stars given, gists, packages). A group is one
 stat panel of several values rather than a tile per number: on a desktop it
@@ -220,6 +373,14 @@ range, because both are current state and a sum over the range would count
 every sweep.
 
 ![The Overview row: the repository picker and the 90 day range across the top, the ghchronicle badge with its Docs and Source buttons, then four tile groups reading 5 repositories with 350 stars and 51 forks, 37.5 thousand views with 21.1 thousand unique visitors and 19.6 thousand clones, 117 followers and 58 following with 4 sponsors and 2 sponsored, and an account with 3.22 thousand contributions over 7.78 years](../site/src/assets/dashboards/overview.png)
+
+The third traffic tile counts the people who cloned and not the clones.
+Continuous integration clones all day, so the clone count belongs beside the
+figure that explains it rather than in a headline: measured on the account this
+was read against, one repository was cloned 135,683 times in a fortnight by
+1,807 cloners, and 186 K beside 2.89 K views reads as an audience. The count
+itself is two panels of the Audience section. The capture above predates that
+change and still reads "clones".
 
 Reads `gh_account`, `gh_repo`, `gh_traffic` and `gh_contributions_total`.
 
@@ -240,6 +401,15 @@ running total kept by this tool would not be. It is also the shape a store can
 answer without reading everything it holds: InfluxDB 3 Core refuses a query
 that would open more than its file limit, forty thousand where this was
 measured, and "how many ever" from a row per fact is exactly that query.
+
+"Every repository, ever" lists every repository the picker holds, forks and
+archived ones included, since that is what the title says. It is ranked by
+commits, which on an account with forks of busy projects means somebody else's
+history outranks everything the account wrote: 370,296 commits against 3,385
+where this was read. So the fork and archived flags are columns, and the table
+opens sorted by the first of them and then by commits, which puts the account's
+own repositories on the first screen and the forks under them without leaving
+one out.
 
 Reads `gh_account_total` and `gh_repo_total`.
 
@@ -330,7 +500,7 @@ Reads `gh_contribution_day`, `gh_commits_week`, `gh_contributions_total`,
 ### Pull requests and issues
 
 Fourteen panels, and the section where the per-item collection pays for itself.
-Merged count, time to merge, time to first review, issues closed, time to close
+Merged count, time to merge, time to review by someone else, issues closed, time to close
 and lines changed as one group of six values; then the same split by state over
 time, the largest merged pull requests, and the breakdowns by author, by
 repository and by reviewer. An item still open is written once per day for as
@@ -341,13 +511,34 @@ each item from its newest row.
 
 ![The Pull requests and issues section: a tile group reading 467 pull requests merged, 10.3 hours to merge, 9.81 hours to a first review, 137 issues closed, 1.75 days to close one and 75 lines per pull request, pull requests and issues per day split by state, time to merge and pull request size over time, the largest merged pull requests with their titles, associations and labels, pull requests by author, the per repository table, the reviewer table led by review-bot at 209 reviews, reviews per day, the two open the longest tables, review threads per day split into bot and human, and the review debt table](../site/src/assets/dashboards/pull-requests-and-issues.png)
 
-> **Read the time to first review carefully**
+> **Read the review wait carefully**
 >
 > The tile counts the first review by somebody other than the author and other
-> than a bot, so on an account reviewed by bots alone it reads No data rather
-> than the bots' few seconds. Measured, nine pull requests in ten had a bot
-> review inside a minute; the Reviewers table shows that, with each bot marked
+> than a bot, so on an account reviewed by bots alone it reads "no human
+> review" rather than the bots' few seconds. It is named for that, because "Time to first
+> review" over No data read as nothing having been reviewed at all: measured
+> here on 2026-09-17, 703 of 825 pull requests in a fortnight had a first
+> review and none of them had one from anybody else, and the field holds
+> fourteen rows in the whole store. Nine pull requests in ten had a bot review
+> inside a minute; the Reviewers table shows that, with each bot marked
 > as one and the author's own replies as one row.
+
+<!-- -->
+
+> **The lists of what to do next leave out what cannot be done**
+>
+> "Open the longest", "Open issues the longest", "Workflows that never ran" and
+> "Stale branches" are the four panels that read as a queue of work. On an
+> account with 17 archived repositories and 22 forks of other people's
+> projects, all four were won by rows nothing can be done to: the eight oldest
+> open pull requests were dependabot's in two archived repositories, every
+> workflow that had never run was in an archived one, and 1,083 of 1,208
+> branches were a fork's. So the two SQL dashboards join each row's repository
+> to `gh_repo`, the one measurement carrying the fork and archived flags, and
+> leave the archived out of the first three and both the archived and the forks
+> out of the branches; the first three keep a Fork column, because a fork's
+> pull request is still one that can be merged. Prometheus, Graphite and
+> Elasticsearch have no join, so there the rows stay and each panel says so.
 
 Reads `gh_pull_request`, `gh_pull_request_review` and `gh_issue`.
 
@@ -377,7 +568,12 @@ that only the two SQL stores can answer.
 
 "Artifact storage counted" exists because the total is a floor. GitHub reports how many artifacts a repository has, the collector
 records how many it actually walked, and when the second is smaller the live
-size is short: on one repository here, by a factor of fifty six.
+size is short: on one repository here, by a factor of fifty six. It carries a
+third count, the live artifacts among the ones walked, because GitHub's own
+total includes the ones it has already expired and the size does not. The tile
+at the top of the section is named for what it is over, and every panel that
+shows the size either shows those counts or says in its description that it is
+a floor.
 
 Reads `gh_workflow_run`, `gh_workflow_job`, `gh_workflow_step`, `gh_workflow`,
 `gh_artifact`, `gh_artifact_total` and `gh_actions_cache`.
@@ -459,8 +655,8 @@ the host of a webhook URL is stored, because the path usually carries a secret.
 One panel is text in the exported files, "Where failure output went",
 because the output of a failed job is text and belongs in a log store, and an
 importer may have none: a dashboard bound to one datasource cannot query two.
-Published to a Grafana that has a Loki datasource, with
-`cmd/publish_dashboard -loki <datasource-uid>`, the same panel draws the last
+Published to a Grafana with a Loki datasource, which the collector makes from
+a Loki sink or takes from `grafana.datasource.loki_uid`, the same panel draws the last
 lines of every failed job from Loki instead, newest first, with the workflow,
 job and run of each line in its logfmt tail. The repository variable is applied
 in the InfluxDB, PostgreSQL and Prometheus dashboards; the Graphite and
@@ -535,7 +731,9 @@ credit shows up. The price per unit is in the table for the same reason: it is
 what explains thirty thousand macOS minutes costing more than two hundred and
 forty thousand Linux ones. A repository can appear in that table and in no
 other panel, because the list that bills and the list that is swept are not the
-same list.
+same list. A charge that belongs to no repository, which is what a Copilot seat
+is, is left out of that table in every store: it is a row of the bill and not a
+repository called (none). The spend totals above it include it.
 
 The two cache panels are about the ceiling. GitHub caps a repository at ten
 gigabytes and evicts the least recently used entry past it, so the bar is each
@@ -646,8 +844,8 @@ creation they would all fall outside every range and read as no tiers at all.
 Pinned items carry the position as a field and not a tag, because a repository
 that moves from slot two to slot three is the same pin, and as a tag every
 rearrangement would fork the series. The repository filter at the top of the
-dashboard does not reach that panel: a pin is named owner/name, or is a gist,
-and the variable holds neither.
+dashboard does not reach that panel: a pin can be a gist, which is named by its
+hash and is in no repository the filter knows.
 
 The achievements are read once a day from the public profile page, because no
 API lists them. Next tier at is the community-observed threshold
@@ -663,9 +861,10 @@ Reads `gh_sponsors_listing`, `gh_sponsorship`, `gh_sponsors_tier`,
 
 ### The collector itself
 
-What the collector has left to spend: the budget of each of GitHub's fifteen
-independent rate limits over time, and a table of all of them ordered by how
-much of each has been used.
+What the collector has left to spend and what it managed to do: the budget of
+each of GitHub's fifteen independent rate limits over time, a table of all of
+them ordered by how much of each has been used, and under those two the row's
+own report on the sweep.
 
 ![The collector itself section: the rate budget used per bucket over the range, and the table of every bucket with its limit, most used and lowest remaining, led by core at 3134 used of 5000 and 1866 left](../site/src/assets/dashboards/the-collector-itself.png)
 
@@ -675,7 +874,31 @@ this costs nothing: `GET /rate_limit` is the one endpoint GitHub does not
 charge for. Without it, a family skipped because a bucket was spent looks
 exactly like a family with nothing to report.
 
-Reads `gh_rate_limit`.
+"Every family" and "What failed, and where" are the two panels below them, and
+the capture above predates both. The first lists every collector that ran in
+the range, what stopped it where something did, how many sweeps it ran in and
+how many repositories it was asked about; a family with no row there did not run
+at all. The reason is a column of its own so that the two kinds of failure sort
+apart: a search budget spent twice a day is not the 502 that cost a repository
+its history, and a family that met both has a row for each. The second is one
+row per repository one collector could not collect, newest first, with what
+GitHub answered. An empty second table is the
+good case, and it is drawn empty rather than refused because the first table's
+rows are written every sweep whether or not anything failed, so the measurement
+behind both exists from the first one.
+
+They are there because of a failure this page could not explain. On 2026-09-16
+five repositories of this account held no workflow run or job at all, each
+because one call for the jobs of one run had answered `502` once and the
+collector had thrown away everything it had gathered for that repository. The
+Continuous integration row was drawn over an account missing its five busiest
+repositories while the Cost row on the same page reported one of them burning
+27.6 K macOS minutes. Neither panel takes the repository variable: the family
+rows belong to no repository, and a repository a sweep could not collect may be
+one the variable does not list, since the variable is built from rows the same
+sweep writes.
+
+Reads `gh_rate_limit` and `gh_collector_family`.
 
 ### The Link column
 
