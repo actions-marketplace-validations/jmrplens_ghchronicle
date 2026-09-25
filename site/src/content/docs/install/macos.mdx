@@ -1,6 +1,7 @@
 ---
 title: macOS
 description: "The whole path on macOS: the darwin archive, quarantine, a launchd agent or daemon, and building it yourself."
+searchTitle: Install ghchronicle on macOS
 compactTables:
   - uname -m reports
 ---
@@ -310,7 +311,7 @@ so the Xcode command line tools are not needed for it.
 <Tabs syncKey="macos-source">
   <TabItem label="go install">
     ```sh
-    go install github.com/jmrplens/ghchronicle/cmd/ghchronicle@latest
+    go install github.com/jmrplens/ghchronicle/v2/cmd/ghchronicle@latest
     ```
 
     Lands in `$(go env GOPATH)/bin`, which is `~/go/bin` unless you moved it,

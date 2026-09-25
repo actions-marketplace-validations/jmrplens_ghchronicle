@@ -1,11 +1,12 @@
 ---
 title: Qué se recoge
-description: Las treinta y cuatro familias, qué le pide cada una a GitHub y por qué existe cada una.
+description: Las treinta y cuatro familias de métricas de GitHub que recoge ghchronicle, qué le pide cada una a la API y por qué existe cada una.
+searchTitle: Qué recoge ghchronicle de GitHub
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
-Treinta y cuatro familias, noventa y dos medidas. Esta página es para qué sirve
+Treinta y cuatro familias, noventa y tres medidas. Esta página es para qué sirve
 cada familia; la [referencia de medidas](/ghchronicle/es/collectors/measurements/)
 es cada etiqueta y cada campo.
 
@@ -39,14 +40,28 @@ Los referrers y las rutas populares son distintos: la API devuelve una
 instantánea de diez sin fecha alguna, así que se sellan al inicio del día UTC y
 se leen como "quién mandaba tráfico cuando preguntamos".
 
-**`stars`** reconstruye la curva de estrellas desde su principio. El endpoint de
-stargazers devuelve un `starred_at` por usuario si se pide con el media type de
-estrellas, así que toda la historia está disponible en la primera ejecución: una
-gráfica que se remonta años, no una que empieza el día en que se instaló el
-colector. Tras la primera pasada solo se leen las cien más nuevas, ya que las
-estrellas nuevas caen al final, y se leen para todos los repositorios a la vez
-en una consulta GraphQL por cada diez. Esa es la diferencia entre un punto y
-280 llamadas para un repositorio con 28.000 estrellas.
+**`stars`** reconstruye la curva de estrellas desde su principio, a partir de
+dos endpoints. El historial diario de estrellas de GitHub da las estrellas que
+ganó un repositorio cada día, hasta la semana en que se creó, a cualquiera que
+pueda ver el repositorio, así que se lee para cada repositorio que recoge la
+pasada y se escribe como `gh_star_day`: entero en la primera pasada, y después
+una petición por las treinta semanas más nuevas, un 304 gratis salvo que alguno
+de sus días ganara o perdiera una estrella o empezara una semana nueva. Las
+barras diarias de estrellas lo cuentan en todos los almacenes menos Prometheus,
+y en InfluxDB y PostgreSQL también la curva, así que toda la historia está ahí
+tras la primera ejecución: una gráfica que se remonta años, no una que empieza
+el día en que se instaló el colector. GitHub Enterprise Server no sirve el
+historial, así que allí esos paneles quedan vacíos. La lista de stargazers dice
+quién. Pedida con el media type de estrellas devuelve
+un `starred_at` por usuario, que se escribe como `gh_star`, y se recorre entera
+una vez; después solo se leen las cien más nuevas, ya que las estrellas nuevas
+caen al final, y se leen para todos los repositorios a la vez en una consulta
+GraphQL por cada diez. Esa es la diferencia entre un punto y 280 llamadas para
+un repositorio con 28.000 estrellas. Desde julio de 2026 GitHub sirve la lista
+solo a los administradores y colaboradores del repositorio, que la cuenta
+siempre es en sus propios repositorios y en los de una organización que
+administra; cualquier otro repositorio tiene sus estrellas contadas por día y a
+nadie nombrado (ver [lo que GitHub no da](/ghchronicle/es/api/limits/)).
 
 **`forks`** recoge quién hizo fork y cuándo. La instantánea del repositorio
 lleva un contador de forks, que dice cuántos pero nunca cuándo ni de quién. La
@@ -266,14 +281,14 @@ equivocados que parecerían exactamente igual de buenos.
 ## Actividad y coste
 
 **`events`** recoge el feed de actividad de la cuenta, la superficie más
-perecedera que tiene GitHub. Guarda aproximadamente los últimos trescientos
-eventos y descarta lo más viejo, sea cual sea su fecha, y nada más registra que
+perecedera que tiene GitHub. Guarda los últimos trescientos eventos, ninguno de
+hace más de treinta días, y nada más registra que
 un repositorio recibió una estrella, un fork, un seguimiento o un push en un
 minuto concreto.
 
 **`notifs`** recoge la bandeja de entrada. Como el feed de eventos es una
-ventana, no una historia: GitHub guarda las notificaciones no leídas alrededor
-de un año y las leídas mucho menos, y `per_page` se limita en silencio a 50 se
+ventana, no una historia: GitHub conserva las notificaciones de la bandeja tres
+meses salvo las guardadas, y `per_page` se limita en silencio a 50 se
 pida lo que se pida.
 
 **`billing`** recoge lo que la cuenta gastó realmente, día a día, por producto,

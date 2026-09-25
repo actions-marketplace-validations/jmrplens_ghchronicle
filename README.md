@@ -9,7 +9,7 @@
 [![Downloads](https://img.shields.io/github/downloads/jmrplens/ghchronicle/total?style=flat&label=Downloads)](https://github.com/jmrplens/ghchronicle/releases)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_ghchronicle&metric=alert_status)](https://sonarcloud.io/summary/overall?id=jmrplens_ghchronicle)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_ghchronicle&metric=coverage)](https://sonarcloud.io/summary/overall?id=jmrplens_ghchronicle)
-[![Go Reference](https://pkg.go.dev/badge/github.com/jmrplens/ghchronicle.svg)](https://pkg.go.dev/github.com/jmrplens/ghchronicle)
+[![Go Reference](https://pkg.go.dev/badge/github.com/jmrplens/ghchronicle/v2.svg)](https://pkg.go.dev/github.com/jmrplens/ghchronicle/v2)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/jmrplens/ghchronicle?style=flat&logo=go&logoColor=white&label=Go)](go.mod)
 [![ghcr.io](https://img.shields.io/badge/ghcr.io-ghchronicle-2496ED?style=flat&logo=docker&logoColor=white)](https://github.com/jmrplens/ghchronicle/pkgs/container/ghchronicle)
 [![Docker Hub](https://img.shields.io/docker/v/jmrplens/ghchronicle?style=flat&logo=docker&logoColor=white&label=Docker%20Hub)](https://hub.docker.com/r/jmrplens/ghchronicle)
@@ -21,9 +21,10 @@ the date it happened.
 
 GitHub answers most questions about the present and almost none about the past.
 The traffic API serves fourteen days and forgets. The activity feed keeps three
-hundred events. Read notifications disappear. The star list will tell you when
-each star was given, but only if you ask before the list gets long. None of it
-is archived anywhere unless you archive it.
+hundred events, none older than thirty days. Inbox notifications are kept for
+three months unless they are saved. The star list will tell you when each star
+was given, but since July 2026 only to the repository's admins and
+collaborators. None of it is archived anywhere unless you archive it.
 
 `ghchronicle` sweeps those surfaces on a schedule and writes every observation
 as a dated point, so a year from now the question "how fast were we merging in
@@ -107,7 +108,7 @@ each one draws and how to put one in a profile README.
 The full documentation is at
 **<https://jmrp.io/docs/ghchronicle/>**, in English and Spanish:
 [quickstart](https://jmrp.io/docs/ghchronicle/start/quickstart/),
-[the 92 measurements](https://jmrp.io/docs/ghchronicle/collectors/measurements/),
+[the 93 measurements](https://jmrp.io/docs/ghchronicle/collectors/measurements/),
 [choosing a store](https://jmrp.io/docs/ghchronicle/sinks/),
 [the cost of a sweep](https://jmrp.io/docs/ghchronicle/api/cost/) and
 [troubleshooting](https://jmrp.io/docs/ghchronicle/reference/troubleshooting/).
@@ -120,29 +121,30 @@ left unproven; the notes on each tag say what landed.
 
 ## What it collects
 
-Ninety-two measurements across thirty-four families, covering every surface
+Ninety-three measurements across thirty-four families, covering every surface
 a personal or organisation account exposes.
 
-| Area          | What is kept                                                                                                                                                                                             |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Traffic       | Views, unique visitors and clones per day, referrers and paths. GitHub's window is 14 days; this rewrites it whole on every sweep, so a collector that was down for a day repairs itself on the next run |
-| Stars         | One point per star, dated when it was given. The full stargazer walk happens once per repository; after that the newest hundred ride in one GraphQL query per ten repositories                           |
-| Repositories  | Stars, forks, watchers, open issues, size, age, idle days, licence, visibility, languages by bytes, topics, community profile score                                                                      |
-| Releases      | Downloads per release and per asset, asset sizes, draft and prerelease state                                                                                                                             |
-| Pull requests | Per item: time to first review, time to merge, lines added and deleted, files changed, review rounds, comments, commits                                                                                  |
-| Issues        | Per item: time to close, comments, reactions, label count                                                                                                                                                |
-| Actions       | Runs with duration and queue time, jobs, individual steps, workflows and their state, artifacts and their expiry, cache usage                                                                            |
-| Security      | Dependabot and code scanning alerts by severity, plus an explicit record of which features are switched on, so no data is distinguishable from no alerts                                                 |
-| Contributions | The whole profile calendar, one point per day at that day's date, plus totals and the per-repository commit breakdown                                                                                    |
-| Activity      | The event feed and the notification inbox, both of which GitHub discards quickly                                                                                                                         |
-| Billing       | Usage per day, product, SKU and repository, with gross, discount and net                                                                                                                                 |
-| Account       | Followers, following, packages, gists, social accounts, sponsors                                                                                                                                         |
+| Area          | What is kept                                                                                                                                                                                                                           |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Traffic       | Views, unique visitors and clones per day, referrers and paths. GitHub's window is 14 days; this rewrites it whole on every sweep, so a collector that was down for a day repairs itself on the next run                               |
+| Stars         | Stars per day for every repository, from GitHub's daily star history, back to the first. Where the token may read the stargazer list (since July 2026: admins, collaborators), one point per star as well, naming who gave it and when |
+| Repositories  | Stars, forks, watchers, open issues, size, age, idle days, licence, visibility, languages by bytes, topics, community profile score                                                                                                    |
+| Releases      | Downloads per release and per asset, asset sizes, draft and prerelease state                                                                                                                                                           |
+| Pull requests | Per item: time to first review, time to merge, lines added and deleted, files changed, review rounds, comments, commits                                                                                                                |
+| Issues        | Per item: time to close, comments, reactions, label count                                                                                                                                                                              |
+| Actions       | Runs with duration and queue time, jobs, individual steps, workflows and their state, artifacts and their expiry, cache usage                                                                                                          |
+| Security      | Dependabot and code scanning alerts by severity, plus an explicit record of which features are switched on, so no data is distinguishable from no alerts                                                                               |
+| Contributions | The whole profile calendar, one point per day at that day's date, plus totals and the per-repository commit breakdown                                                                                                                  |
+| Activity      | The event feed, which GitHub caps at three hundred events and thirty days, and the notification inbox, which it keeps for three months unless saved                                                                                    |
+| Billing       | Usage per day, product, SKU and repository, with gross, discount and net                                                                                                                                                               |
+| Account       | Followers, following, packages, gists, social accounts, sponsors                                                                                                                                                                       |
 
 ## Where it writes
 
-Eleven destinations, and more than one at a time is the normal arrangement. Everything
-is pushed: nothing here needs to be scraped, so the collector runs wherever it
-can reach its databases.
+Eleven destinations, and more than one at a time is the normal arrangement.
+Everything but the Prometheus exporter is pushed, and Prometheus itself can be
+fed through its OTLP receiver, so nothing here needs to be scraped and the
+collector runs wherever it can reach its databases.
 
 | Store                      | Keeps                                          | Good for                                                  |
 | -------------------------- | ---------------------------------------------- | --------------------------------------------------------- |
@@ -184,7 +186,7 @@ than the JSON.
 apply. Build it yourself:
 
 ```sh
-go install github.com/jmrplens/ghchronicle/cmd/ghchronicle@latest
+go install github.com/jmrplens/ghchronicle/v2/cmd/ghchronicle@latest
 ```
 
 or take a binary from the
@@ -233,7 +235,9 @@ ghchronicle                # run on the configured schedule
 ```
 
 The token needs read access. Traffic additionally needs push access to the
-repository, Dependabot alerts need `security_events`, and the `keys` family
+repository and, on a fine-grained token, the repository permission
+Administration (read), which a workflow's automatic `GITHUB_TOKEN` cannot be
+granted; Dependabot alerts need `security_events`, and the `keys` family
 needs `read:public_key` and `read:gpg_key`, which no other scope implies.
 Anything the token
 cannot see is recorded as unavailable and skipped, not treated as a failure: a
@@ -278,8 +282,11 @@ an hour later for the families still missing, until a pass records nothing new
 or ten of them have run.
 
 Three things cannot be backfilled at any price, and the documentation says so
-rather than letting you find out: the event feed keeps three hundred events,
-traffic is fourteen days, and job logs are deleted after ninety.
+rather than letting you find out: the event feed keeps three hundred events
+and none older than thirty days, traffic is fourteen days, and job logs are
+deleted after the repository's retention period, ninety days by default. From
+1 October 2026 workflow runs follow that same retention setting, so a backfill
+reaches only the runs it still keeps.
 
 ## A card for a profile README
 

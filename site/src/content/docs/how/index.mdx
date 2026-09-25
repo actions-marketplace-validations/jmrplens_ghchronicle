@@ -1,6 +1,7 @@
 ---
 title: The sweep
-description: What one pass over GitHub does, in what order, and why each family has its own cadence.
+description: What one ghchronicle sweep over the GitHub API does, in what order, and why each family of metrics has its own cadence.
+searchTitle: How a ghchronicle sweep works
 compactTables:
   - Family
 ---
@@ -25,7 +26,7 @@ flowchart TD
     B -- "no" --> S["Skip the family<br/>and warn"]
     B -- "yes" --> C["Collect"]
     C --> P["Dated points"]
-    P --> H["Destinations that keep the date<br/>InfluxDB, file, stdout, Telegraf, Graphite,<br/>PostgreSQL, a fichero, PostgreSQL,<br/>Elasticsearch"]
+    P --> H["Destinations that keep the date<br/>InfluxDB, file, stdout, Telegraf, Graphite,<br/>PostgreSQL to a file, PostgreSQL,<br/>Elasticsearch"]
     P --> L["Loki<br/>the twenty-two event renderings"]
     P --> RD["Reducer<br/>current values"]
     RD --> G["Prometheus<br/>OTLP, when raw: false"]
@@ -64,7 +65,7 @@ family carries its own.
 | `billing`       | 6h      | Usage per day, product, SKU and repository                     |
 | `planning`      | 6h      | Labels and milestones                                          |
 | `settings`      | 6h      | Webhooks and their deliveries, environments, deploy keys       |
-| `stars`         | 6h      | The stargazer walk once, then the newest hundred               |
+| `stars`         | 6h      | Stars per day for every repository, and the stargazer walk once, then the newest hundred |
 | `traffic`       | 6h      | The whole 14-day window, rewritten                             |
 | `account`       | 12h     | Profile, contribution calendar, contribution totals            |
 | `forks`         | 12h     | Who forked, and when                                            |
@@ -110,12 +111,13 @@ level=WARN msg="family failed everywhere, not marking it as run" family=security
 
 ## The state file
 
-`state_file` holds [six things](/ghchronicle/configuration/#state_file), and
+`state_file` holds [seven things](/ghchronicle/configuration/#state_file), and
 the two a sweep is judged by are when each family last ran and when each
 repository was first seen.
 
-The second is what makes the one-off full walk of the star history happen once
-instead of on every sweep. It is written through a temporary file and renamed,
+The second is what makes the one-off full walk of the stargazer list happen
+once instead of on every sweep, as `history_read` does for the daily star
+history. It is written through a temporary file and renamed,
 so a crash mid-write cannot leave a truncated state that would trigger a full
 re-collection.
 

@@ -1,6 +1,7 @@
 ---
 title: Ways to install
-description: A page per operating system, five ways to get the binary running, and what each one is good for.
+description: "Ways to install ghchronicle: a page per operating system, five ways to get the binary running, and what each one is good for."
+searchTitle: Install ghchronicle
 compactTables:
   - Command
 ---
@@ -73,10 +74,12 @@ keep it running once you are done watching it.
   </TabItem>
   <TabItem label="Go">
     ```sh
-    go install github.com/jmrplens/ghchronicle/cmd/ghchronicle@latest
+    go install github.com/jmrplens/ghchronicle/v2/cmd/ghchronicle@latest
     ```
 
     Needs a Go toolchain, and builds from source at whatever the newest tag is.
+    The `/v2` is part of the path: without it Go settles on 1.0.0, the last
+    release whose module path it accepts, and says nothing.
 
   </TabItem>
   <TabItem label="Container">

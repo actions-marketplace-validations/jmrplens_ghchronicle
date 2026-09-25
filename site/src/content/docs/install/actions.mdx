@@ -1,6 +1,7 @@
 ---
 title: GitHub Actions
-description: The composite Action, its three modes, and the two things a hosted runner does not keep.
+description: "Running ghchronicle as a GitHub Action: the composite Action, its three modes, and the two things a hosted runner does not keep."
+searchTitle: Run ghchronicle as a GitHub Action
 defaultColumns:
   - table: Input
     default: Default
@@ -231,16 +232,18 @@ in the `<picture>` are relative to the README, so a `docs/README.md` points at
 ## Two things a hosted runner does not keep
 
 <Aside type="caution" title="The token must be a personal access token">
-  Traffic needs push access to *every* repository being collected, and the
-  automatic `GITHUB_TOKEN` has it only for the repository the workflow is
-  running in. It also has no `security_events`, no `read:packages`, and is not a
-  user, so nothing account-wide works with it. See [the
-  token](/ghchronicle/start/token/).
+  Traffic needs push access to *every* repository being collected and, on a
+  fine-grained token, the repository permission Administration (read); the
+  automatic `GITHUB_TOKEN` cannot be granted Administration, so it gets a 403
+  even in the repository the workflow runs in. It also has no
+  `security_events`, no `read:packages`, and is not a user, so nothing
+  account-wide works with it. See [the token](/ghchronicle/start/token/).
 </Aside>
 
 **The state file does not survive between runs.** Each run therefore does the
-full stargazer walk again. On a small account that is a handful of calls; on an
-account with many stars, cache it:
+full stargazer walk again, and reads every repository's daily star history
+whole, a page per thirty weeks of its life. On a small account that is a
+handful of calls; on an account with many stars or old repositories, cache it:
 
 ```yaml
 - uses: actions/cache@v4
@@ -251,7 +254,7 @@ account with many stars, cache it:
 ```
 
 and point `state_file` at `~/.ghchronicle/state.json` in the config. A `card`
-mode run reads a restored state file, which is what lets it skip the walk, and
+mode run reads a restored state file, which is what lets it skip both walks, and
 never writes one back: it delivers its points to the card and to no store, so
 nothing it learned may tell the next collection that a family is already done.
 What fills the cache is a `once` or `backfill` step.
@@ -264,7 +267,7 @@ The same thing by hand, if you would rather not depend on it:
 - uses: actions/setup-go@v7
   with:
     go-version: stable
-- run: go install github.com/jmrplens/ghchronicle/cmd/ghchronicle@latest
+- run: go install github.com/jmrplens/ghchronicle/v2/cmd/ghchronicle@latest
 - run: ghchronicle -config .github/ghchronicle.yaml -card profile.svg -card-only
   env:
     GITHUB_TOKEN: ${{ secrets.GHCHRONICLE_TOKEN }}

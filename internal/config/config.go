@@ -601,7 +601,7 @@ var defaultEvery = map[string]family{
 	},
 	"stars": {
 		every: 6 * time.Hour, group: "audience",
-		why: "the full stargazer walk happens once; after that the newest hundred ride in one GraphQL query per ten repositories",
+		why: "the full stargazer walk happens once; after that the newest hundred ride in one GraphQL query per ten repositories, and the daily star history is one request per repository, usually a free 304",
 	},
 	"actions": {
 		every: 15 * time.Minute, group: "ci",
@@ -617,11 +617,11 @@ var defaultEvery = map[string]family{
 	},
 	"events": {
 		every: 30 * time.Minute, group: "feeds",
-		why: "the feed keeps the last three hundred events whatever their dates, so this is the size of a window, not a speed",
+		why: "the feed keeps the last three hundred events of the past thirty days, so this is the size of a window, not a speed",
 	},
 	"notifs": {
 		every: 30 * time.Minute, group: "feeds",
-		why: "read notifications disappear quickly, so this is the size of a window, not a speed",
+		why: "GitHub keeps inbox notifications for three months unless they are saved, but each thread shows only its latest move, so this is the size of a window, not a speed",
 	},
 	"stats": {
 		every: 12 * time.Hour, group: "work",

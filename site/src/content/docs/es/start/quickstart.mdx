@@ -1,6 +1,7 @@
 ---
 title: Inicio rápido
-description: De cero a la primera pasada, y qué hace esa primera pasada que las siguientes no hacen.
+description: Instalar ghchronicle, apuntarlo a una base de datos y lanzar la primera pasada sobre una cuenta de GitHub, y qué hace esa primera pasada que las siguientes no hacen.
+searchTitle: "Inicio rápido de ghchronicle: la primera pasada"
 ---
 
 import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
@@ -62,7 +63,7 @@ mano o quiera saber a qué acaba de decir que sí.
       </TabItem>
       <TabItem label="Go">
         ```sh
-        go install github.com/jmrplens/ghchronicle/cmd/ghchronicle@latest
+        go install github.com/jmrplens/ghchronicle/v2/cmd/ghchronicle@latest
         ```
       </TabItem>
     </Tabs>
@@ -139,9 +140,16 @@ mano o quiera saber a qué acaba de decir que sí.
 Tres cosas ocurren una sola vez, y son la razón de que la primera pasada sea la
 cara.
 
-- Se recorre entera la lista de estrellas, página a página, para que cada
-  estrella lleve la fecha en que se dio. Después, las cien más nuevas de cada
-  repositorio viajan en una consulta GraphQL por cada diez.
+- Se lee el historial diario de estrellas de cada repositorio, vea lo que vea
+  el token, hasta la primera semana del repositorio, y se recorre entera,
+  página a página, la lista de estrellas de cada repositorio cuya lista el
+  token puede leer (desde julio de 2026, solo los
+  [administradores y colaboradores](https://docs.github.com/es/rest/activity/starring#new-access-restrictions)
+  del repositorio), para que cada una de esas estrellas lleve el momento en que
+  se dio y quién la dio. Después, el historial es una petición por repositorio
+  por sus treinta semanas más nuevas, casi siempre un 304 gratis, y las cien
+  estrellas más nuevas de cada lista legible viajan en una consulta GraphQL por
+  cada diez repositorios.
 - Un mes de ejecuciones de workflows, para que una instalación nueva no dibuje
   una historia de CI que empieza hace quince minutos. Después, el doble de la
   cadencia, y nunca menos de dos horas.
@@ -163,9 +171,9 @@ dónde llega y lo que cuesta.
 
 <Aside type="caution" title="Conserva el fichero de estado">
   `state_file` es lo que recuerda por dónde iba cada familia, y
-  [dentro viven seis cosas](/ghchronicle/es/configuration/#state_file). Bórralo y
-  la siguiente pasada lo recoge todo otra vez, lo que cuesta cuota y nada más en
-  cinco de las seis; la sexta es el commit desde el que arranca cada diff de
+  [dentro viven siete cosas](/ghchronicle/es/configuration/#state_file). Bórralo
+  y la siguiente pasada lo recoge todo otra vez, lo que cuesta cuota y nada más
+  en seis de las siete; la séptima es el commit desde el que arranca cada diff de
   dependencias, y los cambios del hueco no se vuelven a recoger.
 </Aside>
 
